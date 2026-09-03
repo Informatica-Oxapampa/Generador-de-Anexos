@@ -1,3 +1,4 @@
+using GaSync = GeneradorAnexos.Application.Sync;
 using System;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -150,7 +151,7 @@ public sealed partial class VentanaPrincipal : Window
             presentador.IsMinimizable = true;
         }
 
-        Estado = new EstadoCompartido();
+        Estado = new GaSync.EstadoCompartido();
         PaginaTdrVista.Inicializar(this, Estado);
         PaginaAnexosVista.Inicializar(this, Estado);
         PaginaUsuariosVista.Inicializar(this);
@@ -175,7 +176,7 @@ public sealed partial class VentanaPrincipal : Window
     }
 
     /// <summary>Estado compartido TDR ↔ Anexos.</summary>
-    public EstadoCompartido Estado { get; }
+    public GaSync.EstadoCompartido Estado { get; }
 
     /// <summary>Fecha documental (automática, no editable por el usuario).</summary>
     public DateOnly FechaDocumento

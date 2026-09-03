@@ -1,3 +1,4 @@
+using GaSync = GeneradorAnexos.Application.Sync;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,7 +25,7 @@ public sealed partial class PaginaAnexos : UserControl
     private readonly GestorVistasPrevias _vistasPrevias = new("anexo");
 
     private VentanaPrincipal? _ventana;
-    private EstadoCompartido? _estado;
+    private GaSync.EstadoCompartido? _estado;
     private bool _consultandoDni;
 
     public PaginaAnexos()
@@ -35,7 +36,7 @@ public sealed partial class PaginaAnexos : UserControl
     }
 
     /// <summary>Inyecta la ventana y el estado compartido tras construir el árbol.</summary>
-    public void Inicializar(VentanaPrincipal ventana, EstadoCompartido estado)
+    public void Inicializar(VentanaPrincipal ventana, GaSync.EstadoCompartido estado)
     {
         _ventana = ventana;
         _estado = estado;
@@ -365,7 +366,7 @@ public sealed partial class PaginaAnexos : UserControl
             ["DIA"] = partes.Dia,
             ["MES"] = partes.Mes,
             ["ANO"] = partes.Anio,
-            [EstadoCompartido.ClaveNumeroPedido] = CampoNumeroPedido.Valor,
+            [GaSync.EstadoCompartido.ClaveNumeroPedido] = CampoNumeroPedido.Valor,
         };
 
         return contexto;

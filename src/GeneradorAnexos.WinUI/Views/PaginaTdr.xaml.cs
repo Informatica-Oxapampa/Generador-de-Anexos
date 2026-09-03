@@ -1,3 +1,4 @@
+using GaSync = GeneradorAnexos.Application.Sync;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -30,8 +31,8 @@ public sealed partial class PaginaTdr : UserControl
     private readonly TablaPagos _tablaPagos = new();
 
     private VentanaPrincipal? _ventana;
-    private EstadoCompartido? _estado;
-    private SincronizadorUnidireccional? _sincronizador;
+    private GaSync.EstadoCompartido? _estado;
+    private GaSync.SincronizadorUnidireccional? _sincronizador;
     private string _rutaPedido = string.Empty;
 
     public PaginaTdr()
@@ -56,7 +57,7 @@ public sealed partial class PaginaTdr : UserControl
         AplicarModo(SelectorModo.ModoUnico);
     }
 
-    public void Inicializar(VentanaPrincipal ventana, EstadoCompartido estado)
+    public void Inicializar(VentanaPrincipal ventana, GaSync.EstadoCompartido estado)
     {
         _ventana = ventana;
         _estado = estado;
@@ -145,7 +146,7 @@ public sealed partial class PaginaTdr : UserControl
             return;
         }
 
-        _sincronizador = new SincronizadorUnidireccional(() => CampoDenominacion.Valor);
+        _sincronizador = new GaSync.SincronizadorUnidireccional(() => CampoDenominacion.Valor);
 
         _sincronizador.Agregar("objeto",
             () => CampoObjetivo.Valor,
@@ -409,7 +410,7 @@ public sealed partial class PaginaTdr : UserControl
             // directamente; en modo multiple lo sustituye la tabla clonada.
             ["DESCRIPCION_PRESENTACION_CARTA"] = DescripcionEntregableUnico(),
             ["PLAZO_SERVICIO"] = PlazoEntregableUnico(),
-            [EstadoCompartido.ClaveNumeroPedido] = CampoPedido.Valor,
+            [GaSync.EstadoCompartido.ClaveNumeroPedido] = CampoPedido.Valor,
             ["DIA"] = partes.Dia,
             ["MES"] = partes.Mes,
             ["ANO"] = partes.Anio,
