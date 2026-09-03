@@ -1,0 +1,61 @@
+<!--
+    Controls/CampoCombo.xaml
+    ────────────────────────
+    Campo de selección. En modo cerrado usa ComboBox; con Editable = True usa
+    AutoSuggestBox, el control nativo de WinUI equivalente al autocompletado
+    del aplicativo original: filtra mientras se escribe y admite valores que no
+    están en la lista.
+-->
+<UserControl
+    x:Class="GeneradorAnexos.WinUI.Controls.CampoCombo"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:GeneradorAnexos.WinUI.Controls"
+    HorizontalAlignment="Stretch"
+    HorizontalContentAlignment="Stretch">
+
+    <StackPanel Spacing="6">
+
+        <StackPanel Orientation="Horizontal" Spacing="6">
+            <controls:Icono x:Name="IconoLider"
+                            Tamano="14"
+                            Trazo="{ThemeResource Ga.TextoTenue}"
+                            VerticalAlignment="Center"
+                            Visibility="Collapsed" />
+            <TextBlock x:Name="Etiqueta"
+                       Style="{StaticResource Ga.EtiquetaCampo}"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+
+        <Grid>
+            <!-- Lista cerrada -->
+            <ComboBox x:Name="Lista"
+                      Style="{StaticResource Ga.Combo}"
+                      SelectionChanged="AlCambiarSeleccion" />
+
+            <!-- Lista con autocompletado (Editable = True) -->
+            <AutoSuggestBox x:Name="Sugerencias"
+                            MinHeight="34"
+                            FontSize="14"
+                            Visibility="Collapsed"
+                            TextChanged="AlEscribirSugerencia"
+                            SuggestionChosen="AlElegirSugerencia"
+                            QueryIcon="Find" />
+        </Grid>
+
+        <Grid x:Name="FilaMensaje" ColumnSpacing="6" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <controls:Icono x:Name="IconoOk" Grid.Column="0"
+                            Nombre="check" Tamano="13"
+                            Trazo="{ThemeResource Ga.Ok}"
+                            VerticalAlignment="Top"
+                            Margin="0,2,0,0"
+                            Visibility="Collapsed" />
+            <TextBlock x:Name="Mensaje" Grid.Column="1"
+                       Style="{StaticResource Ga.MensajeAyuda}" />
+        </Grid>
+    </StackPanel>
+</UserControl>

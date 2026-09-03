@@ -1,0 +1,92 @@
+<!--
+    Themes/Plantillas.xaml
+    ──────────────────────
+    Plantillas predeterminadas de los controles propios de la aplicación.
+    Se cargan desde Themes/Generic.xaml y desde App.xaml.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:GeneradorAnexos.WinUI.Controls"
+    xmlns:conv="using:GeneradorAnexos.WinUI.Converters">
+
+    <!-- Declarados aquí porque las plantillas de abajo los usan por
+         StaticResource, que se resuelve en orden de declaración. -->
+    <conv:TextoAVisibilidad x:Key="Ga.TextoAVisibilidad" />
+    <conv:BooleanoAVisibilidad x:Key="Ga.BoolAVisibilidad" />
+    <conv:BooleanoAVisibilidadInversa x:Key="Ga.BoolAVisibilidadInversa" />
+
+    <!-- ══════════════════════ TarjetaSeccion ══════════════════════
+         Tarjeta de contenido: placa con icono, título, descripción, filete
+         separador y área de contenido. El relleno y los radios provienen de
+         la misma escala que el resto de superficies, de modo que todas las
+         tarjetas de la aplicación comparten métrica. -->
+    <Style TargetType="controls:TarjetaSeccion">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:TarjetaSeccion">
+                    <Border Background="{ThemeResource Ga.Panel}"
+                            BorderBrush="{ThemeResource Ga.PanelBorde}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="22,20,22,22">
+                        <StackPanel Spacing="16">
+
+                            <!-- Encabezado: placa con icono + textos -->
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Width="34" Height="34"
+                                        VerticalAlignment="Top"
+                                        Background="{ThemeResource Ga.AcentoSuave}"
+                                        BorderBrush="{ThemeResource Ga.AcentoBorde}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <controls:Icono Nombre="{TemplateBinding Icono}"
+                                                    Tamano="17"
+                                                    Trazo="{ThemeResource Ga.Acento}"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center" />
+                                </Border>
+
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{TemplateBinding Titulo}"
+                                               Style="{StaticResource Ga.TituloSeccion}" />
+                                    <TextBlock Text="{TemplateBinding Descripcion}"
+                                               Style="{StaticResource Ga.DescSeccion}"
+                                               Visibility="{Binding Descripcion,
+                                                   RelativeSource={RelativeSource TemplatedParent},
+                                                   Converter={StaticResource Ga.TextoAVisibilidad}}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Style="{StaticResource Ga.Separador}" />
+
+                            <!-- Rejilla de dos columnas; TarjetaSeccion.Agregar la puebla. -->
+                            <Grid x:Name="PartRejilla"
+                                  ColumnSpacing="16"
+                                  RowSpacing="14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                            </Grid>
+
+                            <!-- Contenido declarado directamente en XAML -->
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              HorizontalAlignment="Stretch"
+                                              HorizontalContentAlignment="Stretch" />
+                        </StackPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

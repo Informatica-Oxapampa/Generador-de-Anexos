@@ -1,0 +1,88 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  Generador de Anexos — archivos que NUNCA deben subirse al repositorio
+#  Municipalidad Provincial de Oxapampa · OTI
+#
+#  Regla general: al repositorio va el CÓDIGO FUENTE. Lo compilado, lo
+#  descargado y lo secreto se queda fuera.
+# ══════════════════════════════════════════════════════════════════════════
+
+# ─────────── Resultados de compilación ───────────
+bin/
+obj/
+publicado/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.cache
+.vs/
+.vscode/
+*.binlog
+
+# ─────────── Paquetes que se distribuyen por Releases, no por el repo ───────────
+# El instalador pesa cientos de MB y se publica como adjunto de la Release.
+instalador/salida/
+*.msi
+*.msix
+
+# El redistribuible de Visual C++ es un binario de Microsoft: cada quien lo
+# descarga de su origen oficial. Ver instalador/redist/LEEME.txt
+instalador/redist/*.exe
+
+# ─────────── SECRETOS: nunca, bajo ninguna circunstancia ───────────
+# Certificados y claves privadas
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+*.jks
+*.keystore
+clave-privada*
+*privada*.xml
+
+# Credenciales y configuración con secretos
+*.env
+.env.*
+appsettings.*.json
+!appsettings.json
+secrets.json
+credenciales*
+*token*.txt
+*.credentials
+
+# ─────────── DATOS: información de personas y de la entidad ───────────
+# Base de datos de registros del usuario y sus respaldos
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+respaldos/
+backups/
+
+# Pedidos del SIGA usados como muestra de prueba: llevan el nombre de la
+# persona a la que se entrega el servicio. Ver tests/.../Fixtures/LEEME.md
+tests/**/Fixtures/*.pdf
+
+# Documentos generados con datos reales de proveedores
+# (las PLANTILLAS sí van al repositorio; los documentos rellenados, no)
+*_generado.docx
+*_generado.pdf
+salida-documentos/
+documentos-prueba/
+
+# Registros de diagnóstico
+*.log
+logs/
+
+# ─────────── Sistema operativo y editores ───────────
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.tmp
+*~
+~$*.docx
+~$*.xlsx

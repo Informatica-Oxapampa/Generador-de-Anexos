@@ -1,0 +1,160 @@
+# ════════════════════════════════════════════════════════════════════════════
+#  Publicación de una versión del programa
+#
+#  Se dispara SOLO al crear una etiqueta con formato  v1.2.3
+#  Los commits del día a día NO disparan nada: puede hacer todos los push que
+#  quiera desde GitHub Desktop sin que llegue nada a los equipos.
+#
+#  Qué hace:
+#    1. Compila y publica la aplicación (autocontenida, x64).
+#    2. Comprueba que la versión del proyecto coincide con la etiqueta.
+#    3. Genera el instalador con Inno Setup.
+#    4. Calcula el SHA-256 y el tamaño.
+#    5. Escribe update.json con los dos canales (programa y plantillas).
+#    6. Crea la Release y adjunta los archivos.
+# ════════════════════════════════════════════════════════════════════════════
+name: Publicar versión
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      etiqueta:
+        description: 'Etiqueta a publicar, por ejemplo v1.0.1'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: windows-latest
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Determinar la versión
+        id: version
+        shell: pwsh
+        run: |
+          $etiqueta = if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $env:GITHUB_REF -replace 'refs/tags/', ''
+          } else {
+            '${{ github.event.inputs.etiqueta }}'
+          }
+          $version = $etiqueta -replace '^v', ''
+          "etiqueta=$etiqueta" >> $env:GITHUB_OUTPUT
+          "version=$version"   >> $env:GITHUB_OUTPUT
+          Write-Host "Publicando $etiqueta (version $version)"
+
+      - name: Comprobar que el proyecto declara esa misma versión
+        shell: pwsh
+        run: |
+          $csproj = 'src/GeneradorAnexos.WinUI/GeneradorAnexos.WinUI.csproj'
+          $declarada = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version |
+                        Where-Object { $_ } | Select-Object -First 1
+          if ($declarada -ne '${{ steps.version.outputs.version }}') {
+            Write-Error "El csproj declara $declarada pero la etiqueta es ${{ steps.version.outputs.version }}. Iguálelos antes de publicar."
+            exit 1
+          }
+          Write-Host "Version coherente: $declarada"
+
+      - name: Publicar la aplicación
+        shell: pwsh
+        run: |
+          dotnet publish src/GeneradorAnexos.WinUI/GeneradorAnexos.WinUI.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:Platform=x64 -o publicado
+          if (-not (Test-Path 'publicado/GeneradorAnexos.exe')) {
+            Write-Error 'La publicacion no genero el ejecutable.'
+            exit 1
+          }
+
+      - name: Instalar Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Generar el instalador
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
+          & $iscc /Q instalador\GeneradorAnexos.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Empaquetar las plantillas
+        shell: pwsh
+        run: |
+          $plantillas = (Get-Content 'plantillas/version.txt' -Raw).Trim()
+          "plantillas=$plantillas" >> $env:GITHUB_OUTPUT
+          New-Item -ItemType Directory -Force -Path salida | Out-Null
+          Compress-Archive -Path plantillas\* -DestinationPath "salida\plantillas-$plantillas.zip" -Force
+        id: plantillas
+
+      - name: Calcular hashes y escribir update.json
+        shell: pwsh
+        run: |
+          $version    = '${{ steps.version.outputs.version }}'
+          $etiqueta   = '${{ steps.version.outputs.etiqueta }}'
+          $plantVer   = '${{ steps.plantillas.outputs.plantillas }}'
+          $base       = "https://github.com/${{ github.repository }}/releases/download/$etiqueta"
+
+          $setup = Get-ChildItem "instalador\salida\*.exe" | Select-Object -First 1
+          $zip   = Get-ChildItem "salida\plantillas-*.zip"  | Select-Object -First 1
+
+          $manifiesto = [ordered]@{
+            manifiesto = 1
+            publicado  = (Get-Date).ToUniversalTime().ToString('o')
+            release    = $etiqueta
+            app = [ordered]@{
+              version     = $version
+              fecha       = (Get-Date).ToString('yyyy-MM-dd')
+              url         = "$base/$($setup.Name)"
+              sha256      = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash
+              tamano      = $setup.Length
+              obligatoria = $false
+              notas       = @()
+            }
+            plantillas = [ordered]@{
+              version  = $plantVer
+              fecha    = (Get-Date).ToString('yyyy-MM-dd')
+              url      = "$base/$($zip.Name)"
+              sha256   = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash
+              tamano   = $zip.Length
+              archivos = @('plantilla_anexos.docx', 'plantilla_tdr.docx')
+              notas    = @()
+            }
+          }
+
+          $manifiesto | ConvertTo-Json -Depth 6 |
+            Set-Content -Path 'salida\update.json' -Encoding utf8
+
+          # Listado de comprobación, útil para verificar a mano una descarga.
+          "$((Get-FileHash $setup.FullName -Algorithm SHA256).Hash)  $($setup.Name)" |
+            Set-Content 'salida\SHA256SUMS.txt' -Encoding ascii
+          "$((Get-FileHash $zip.FullName -Algorithm SHA256).Hash)  $($zip.Name)" |
+            Add-Content 'salida\SHA256SUMS.txt' -Encoding ascii
+
+          Copy-Item $setup.FullName salida\
+          Get-Content 'salida\update.json'
+
+      - name: Crear la Release y adjuntar los archivos
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.etiqueta }}
+          name: ${{ steps.version.outputs.etiqueta }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            salida/*.exe
+            salida/plantillas-*.zip
+            salida/update.json
+            salida/SHA256SUMS.txt

@@ -1,0 +1,253 @@
+<!--
+    Views/PaginaConfiguracion.xaml
+    ──────────────────────────────
+    Sección Configuración. Usa las mismas tarjetas, tipografía y espaciado que
+    el resto de la aplicación, de modo que no parece una pantalla añadida.
+
+    Bloques: Apariencia · Actualizaciones · Datos y diagnóstico · Acerca de.
+-->
+<UserControl
+    x:Class="GeneradorAnexos.WinUI.Views.PaginaConfiguracion"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:GeneradorAnexos.WinUI.Controls">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalContentAlignment="Stretch">
+        <!-- Sin MaxWidth ni HorizontalAlignment: el contenido se estira al
+             ancho de la ventana. Ver la nota en PaginaTdr.xaml. -->
+        <StackPanel Padding="24,4,24,24" Spacing="16">
+
+            <!-- ══════════════ Apariencia ══════════════ -->
+            <controls:TarjetaSeccion Titulo="Apariencia"
+                                     Descripcion="Elija el tema de la aplicación. La opción se conserva al cerrar el programa."
+                                     Icono="eye">
+                <StackPanel Spacing="14">
+                    <RadioButtons x:Name="OpcionesTema"
+                                  SelectionChanged="AlCambiarTema">
+                        <x:String>Usar el tema de Windows</x:String>
+                        <x:String>Tema claro</x:String>
+                        <x:String>Tema oscuro</x:String>
+                    </RadioButtons>
+
+                    <InfoBar IsOpen="True"
+                             IsClosable="False"
+                             Severity="Informational"
+                             Message="Con «Usar el tema de Windows», si cambia el modo claro u oscuro del sistema mientras la aplicación está abierta, la interfaz se actualiza sola." />
+                </StackPanel>
+            </controls:TarjetaSeccion>
+
+            <!-- ══════════════ Actualizaciones ══════════════ -->
+            <controls:TarjetaSeccion Titulo="Actualizaciones"
+                                     Descripcion="Las versiones se publican en el repositorio oficial de la OTI."
+                                     Icono="refresh">
+                <StackPanel Spacing="16">
+
+                    <Grid ColumnSpacing="16" RowSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Versión instalada"
+                                   Style="{StaticResource Ga.EtiquetaCampo}" />
+                        <TextBlock x:Name="VersionActual" Grid.Row="0" Grid.Column="1"
+                                   Style="{StaticResource Ga.TextoPanel}" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Estado"
+                                   Style="{StaticResource Ga.EtiquetaCampo}" />
+                        <TextBlock x:Name="EstadoActualizacion" Grid.Row="1" Grid.Column="1"
+                                   Style="{StaticResource Ga.TextoPanel}" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Plantillas de Word"
+                                   Style="{StaticResource Ga.EtiquetaCampo}" />
+                        <TextBlock x:Name="VersionPlantillas" Grid.Row="2" Grid.Column="1"
+                                   Style="{StaticResource Ga.TextoPanel}" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Última comprobación"
+                                   Style="{StaticResource Ga.EtiquetaCampo}" />
+                        <TextBlock x:Name="UltimaComprobacion" Grid.Row="3" Grid.Column="1"
+                                   Style="{StaticResource Ga.TextoPanel}" />
+                    </Grid>
+
+                    <Border Style="{StaticResource Ga.Separador}" />
+
+                    <ToggleSwitch x:Name="InterruptorAutomatico"
+                                  Header="Buscar actualizaciones al iniciar"
+                                  OnContent="Activado"
+                                  OffContent="Desactivado"
+                                  Toggled="AlCambiarBusquedaAutomatica" />
+
+                    <TextBlock Style="{StaticResource Ga.MensajeAyuda}"
+                               Text="Solo se consultan las versiones publicadas oficialmente, no los cambios en desarrollo del repositorio. La comprobación se hace en segundo plano y nada se descarga sin que usted lo autorice." />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="BotonBuscar"
+                                Style="{StaticResource Ga.BotonPrimario}"
+                                Click="AlBuscarActualizaciones">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <controls:Icono Nombre="refresh" Tamano="15"
+                                                Trazo="{ThemeResource Ga.SobreAcento}" />
+                                <TextBlock Text="Buscar actualizaciones ahora" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource Ga.BotonSecundario}"
+                                Click="AlVerNotas"
+                                ToolTipService.ToolTip="Abre la página de versiones en el navegador">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <controls:Icono Nombre="eye" Tamano="15" />
+                                <TextBlock Text="Ver notas de la versión" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <ProgressRing x:Name="AnilloBusqueda"
+                                  IsActive="False"
+                                  Visibility="Collapsed"
+                                  Width="20" Height="20"
+                                  HorizontalAlignment="Left" />
+                </StackPanel>
+            </controls:TarjetaSeccion>
+
+            <!-- ══════════════ Datos y diagnóstico ══════════════ -->
+            <controls:TarjetaSeccion Titulo="Datos y diagnóstico"
+                                     Descripcion="Sus registros, respaldos y preferencias se guardan en su perfil de Windows."
+                                     Icono="folder">
+                <StackPanel Spacing="16">
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Carpeta de datos" Style="{StaticResource Ga.EtiquetaCampo}" />
+                        <TextBlock x:Name="RutaDatos"
+                                   Style="{StaticResource Ga.MensajeAyuda}"
+                                   IsTextSelectionEnabled="True" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Registro de diagnóstico" Style="{StaticResource Ga.EtiquetaCampo}" />
+                        <TextBlock x:Name="EstadoRegistro" Style="{StaticResource Ga.MensajeAyuda}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Style="{StaticResource Ga.BotonSecundario}" Click="AlAbrirCarpetaDatos">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <controls:Icono Nombre="folder" Tamano="15" />
+                                <TextBlock Text="Abrir carpeta de datos" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource Ga.BotonSecundario}" Click="AlAbrirRegistro">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <controls:Icono Nombre="text" Tamano="15" />
+                                <TextBlock Text="Abrir registro de errores" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource Ga.BotonSecundario}" Click="AlVaciarRegistro">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <controls:Icono Nombre="eraser" Tamano="15" />
+                                <TextBlock Text="Vaciar registro" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="BotonIntegridad"
+                                Style="{StaticResource Ga.BotonSecundario}"
+                                Click="AlComprobarIntegridad"
+                                ToolTipService.ToolTip="Verifica que la base de registros no esté dañada">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <controls:Icono Nombre="check-circle" Tamano="15" />
+                                <TextBlock Text="Comprobar base de datos" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <Border Style="{StaticResource Ga.Separador}" />
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Plantillas de Word"
+                                   Style="{StaticResource Ga.EtiquetaCampo}" />
+                        <TextBlock Style="{StaticResource Ga.MensajeAyuda}"
+                                   Text="Si unas plantillas actualizadas dieran problemas, puede volver a las que trajo el instalador. Se descargarán de nuevo la próxima vez que publique una versión posterior." />
+                        <Button Style="{StaticResource Ga.BotonSecundario}"
+                                HorizontalAlignment="Left"
+                                Click="AlRestaurarPlantillas">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <controls:Icono Nombre="file" Tamano="15" />
+                                <TextBlock Text="Restaurar plantillas incluidas" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <Border Style="{StaticResource Ga.Separador}" />
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Restablecer preferencias"
+                                   Style="{StaticResource Ga.EtiquetaCampo}" />
+                        <TextBlock Style="{StaticResource Ga.MensajeAyuda}"
+                                   Text="Devuelve el tema, las carpetas recordadas y las opciones de actualización a sus valores iniciales. No elimina registros guardados, respaldos ni documentos." />
+                        <Button Style="{StaticResource Ga.BotonSecundario}"
+                                HorizontalAlignment="Left"
+                                Click="AlRestablecer">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <controls:Icono Nombre="refresh" Tamano="15" />
+                                <TextBlock Text="Restablecer preferencias" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </controls:TarjetaSeccion>
+
+            <!-- ══════════════ Acerca de ══════════════ -->
+            <controls:TarjetaSeccion Titulo="Acerca de"
+                                     Descripcion="Información del programa."
+                                     Icono="info">
+                <Grid ColumnSpacing="16" RowSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Aplicación"
+                               Style="{StaticResource Ga.EtiquetaCampo}" />
+                    <TextBlock x:Name="AcercaNombre" Grid.Row="0" Grid.Column="1"
+                               Style="{StaticResource Ga.TextoPanel}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Versión"
+                               Style="{StaticResource Ga.EtiquetaCampo}" />
+                    <TextBlock x:Name="AcercaVersion" Grid.Row="1" Grid.Column="1"
+                               Style="{StaticResource Ga.TextoPanel}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Entidad"
+                               Style="{StaticResource Ga.EtiquetaCampo}" />
+                    <TextBlock x:Name="AcercaEntidad" Grid.Row="2" Grid.Column="1"
+                               Style="{StaticResource Ga.TextoPanel}" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Oficina responsable"
+                               Style="{StaticResource Ga.EtiquetaCampo}" />
+                    <TextBlock x:Name="AcercaOficina" Grid.Row="3" Grid.Column="1"
+                               Style="{StaticResource Ga.TextoPanel}" />
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Alcance"
+                               Style="{StaticResource Ga.EtiquetaCampo}" />
+                    <TextBlock Grid.Row="4" Grid.Column="1"
+                               Style="{StaticResource Ga.TextoPanel}"
+                               Text="Generación de Términos de Referencia y Anexos N° 06 al 09 para la contratación de bienes y servicios menores." />
+                </Grid>
+            </controls:TarjetaSeccion>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

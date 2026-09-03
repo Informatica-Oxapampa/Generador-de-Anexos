@@ -1,0 +1,52 @@
+Generador de Anexos
+Municipalidad Provincial de Oxapampa
+Oficina de Tecnología de la Información
+
+======================================================================
+
+El Generador de Anexos es una aplicación desarrollada para facilitar la elaboración de los Términos de Referencia (TDR) y de los Anexos N.° 06 al N.° 09, utilizados en los procedimientos de contratación de bienes y servicios menores.
+
+La aplicación permite agilizar la generación de documentos, mantener la información organizada y reducir errores durante el proceso de elaboración.
+
+COMPONENTES QUE SE INSTALARÁN
+-----------------------------
+Durante la instalación se incorporarán automáticamente los siguientes elementos:
+
+  - La aplicación Generador de Anexos y todos los componentes necesarios para su correcto funcionamiento.
+  - Las dependencias requeridas por el sistema, sin necesidad de instalar .NET u otros componentes adicionales de forma manual.
+  - Las plantillas de Microsoft Word utilizadas para la generación de TDR y anexos.
+  - Un acceso directo en el Menú Inicio de Windows.
+  - Opcionalmente, un acceso directo en el Escritorio, según la elección realizada durante la instalación.
+
+REQUISITOS DEL SISTEMA
+----------------------
+Para garantizar el correcto funcionamiento de la aplicación, el equipo debe cumplir como mínimo con los siguientes requisitos:
+
+  - Sistema operativo: Windows 10 versión 2004 (compilación 19041) o posterior, o Windows 11.
+  - Arquitectura: sistema operativo de 64 bits (x64).
+  - Espacio disponible: aproximadamente 350 MB de espacio libre en disco.
+
+ALMACENAMIENTO DE INFORMACIÓN
+-----------------------------
+Los registros, configuraciones, preferencias y copias de respaldo generados por la aplicación se almacenan de manera independiente en el perfil de cada usuario de Windows.
+
+Esta información se conserva durante las actualizaciones del aplicativo, evitando la pérdida de datos personales o configuraciones previamente registradas.
+
+ACTUALIZACIONES
+---------------
+Las versiones posteriores del Generador de Anexos podrán instalarse sobre la versión existente manteniendo, cuando corresponda, los registros y configuraciones del usuario.
+
+Se recomienda cerrar la aplicación antes de iniciar cualquier proceso de actualización.
+
+DESINSTALACIÓN
+--------------
+El programa puede desinstalarse en cualquier momento desde:
+
+Configuración de Windows  →  Aplicaciones  →  Aplicaciones instaladas  →  Generador de Anexos
+
+La desinstalación elimina los componentes principales de la aplicación. Los datos personales o registros almacenados en el perfil del usuario podrán mantenerse para evitar pérdidas accidentales de información.
+
+======================================================================
+
+Generador de Anexos
+Municipalidad Provincial de Oxapampa – Oficina de Tecnología de la Información

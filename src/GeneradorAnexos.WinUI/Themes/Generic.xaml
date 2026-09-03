@@ -1,0 +1,17 @@
+<!--
+    Themes/Generic.xaml
+    ───────────────────
+    Diccionario que WinUI busca por convencion para las plantillas por defecto
+    de los controles personalizados. Solo agrega y encadena.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+>
+
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="ms-appx:///Paleta.xaml" />
+        <ResourceDictionary Source="ms-appx:///Controles.xaml" />
+        <ResourceDictionary Source="ms-appx:///Plantillas.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

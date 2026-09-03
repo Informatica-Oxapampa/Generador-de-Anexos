@@ -1,0 +1,89 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <RootNamespace>GeneradorAnexos.WinUI</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <Nullable>enable</Nullable>
+
+    <!-- Version del producto (Semantic Versioning). Es el unico sitio donde se
+         cambia: la aplicacion la lee del ensamblado y el instalador comprueba
+         que coincide con la del ejecutable publicado.
+
+         Se mantiene en 1.0.0 durante toda la preparacion de la primera version
+         oficial. Las correcciones previas al lanzamiento NO incrementan el
+         numero: solo se sube despues de publicar la 1.0.0. -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Sin empaquetar y autocontenido: produce un .exe que arranca sin
+         instalar el runtime de Windows App SDK en el equipo destino. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <PublishReadyToRun>false</PublishReadyToRun>
+
+    <AssemblyName>GeneradorAnexos</AssemblyName>
+    <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <NoWarn>$(NoWarn);CA1416;CS8305;NU1701</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 1.8 separa las tareas MSIX/PRI en paquetes NuGet, por lo que la
+         publicacion funciona tambien con dotnet CLI sin Visual Studio. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260804001" />
+  </ItemGroup>
+
+  <!-- WinAppSDK 1.8 indexa los XBF embebidos solo por nombre de archivo. El
+       Link plano hace coincidir las URI generadas con ese indice. Todos los
+       XAML de este ejecutable tienen nombres unicos. -->
+  <ItemGroup>
+    <Page Update="**\*.xaml">
+      <Link>%(Filename)%(Extension)</Link>
+    </Page>
+    <Page Update="App.xaml">
+      <Link>App.xaml</Link>
+    </Page>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GeneradorAnexos.Domain\GeneradorAnexos.Domain.csproj" />
+    <ProjectReference Include="..\GeneradorAnexos.Application\GeneradorAnexos.Application.csproj" />
+    <ProjectReference Include="..\GeneradorAnexos.Infrastructure.Windows\GeneradorAnexos.Infrastructure.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- version.txt declara la version de plantillas incluida en el instalador;
+         el canal de actualizacion de plantillas la compara con la publicada.
+         catalogos.json trae las areas usuarias y las entidades bancarias, que
+         se actualizan por ese mismo canal sin reinstalar el programa. -->
+    <Content Include="..\..\plantillas\**\*.docx;..\..\plantillas\version.txt;..\..\plantillas\catalogos.json"
+             Link="plantillas\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- La publicacion por CLI de WinAppSDK 1.8 puede omitir el indice PRI y
+       los XBF propios aunque si esten en TargetDir. Sin ellos el .exe compila,
+       pero termina con XamlParseException al crear la ventana principal. -->
+  <Target Name="CopiarRecursosWinUiAlPublicar" AfterTargets="Publish">
+    <Error Condition="!Exists('$(TargetDir)$(AssemblyName).pri')"
+           Text="No se genero el indice de recursos WinUI $(AssemblyName).pri." />
+    <ItemGroup>
+      <RecursosWinUiPublicados Include="$(TargetDir)*.xbf" />
+      <RecursosWinUiPublicados Include="$(TargetDir)$(AssemblyName).pri" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RecursosWinUiPublicados)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

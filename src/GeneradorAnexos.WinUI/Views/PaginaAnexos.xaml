@@ -1,0 +1,213 @@
+<!--
+    Views/PaginaAnexos.xaml
+    ───────────────────────
+    Formulario de los Anexos N° 06 al 09.
+
+    Tres tarjetas —Proveedor, Cuenta Bancaria y Propuesta Económica— con la
+    misma métrica que el resto de la aplicación, y la barra de acciones fija
+    al pie: información a la izquierda, acciones a la derecha.
+-->
+<UserControl
+    x:Class="GeneradorAnexos.WinUI.Views.PaginaAnexos"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:GeneradorAnexos.WinUI.Controls">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ScrollViewer x:Name="Desplazador"
+                      Grid.Row="0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalContentAlignment="Stretch">
+            <!-- Sin MaxWidth ni HorizontalAlignment: el contenido se estira al
+                 ancho de la ventana. Ver la nota en PaginaTdr.xaml. -->
+            <StackPanel Padding="24,4,24,24" Spacing="16">
+
+                <!-- ══════════ Datos del Proveedor ══════════ -->
+                <controls:TarjetaSeccion Titulo="Datos del Proveedor"
+                                         Descripcion="Información de la persona natural o jurídica contratada."
+                                         Icono="user">
+                    <StackPanel Spacing="14">
+                        <controls:CampoTexto x:Name="CampoNombre"
+                                             Titulo="Razón Social / Nombre completo"
+                                             Marcador="Ej.: Juan Pérez Quispe / Servicios Generales S.A.C."
+                                             Icono="user"
+                                             MensajeError="Ingrese el nombre o razón social." />
+
+                        <controls:FilaDniValidarRuc x:Name="FilaDniRuc" />
+
+                        <controls:CampoTexto x:Name="CampoDireccion"
+                                             Titulo="Dirección"
+                                             Marcador="Ej.: Jr. Bolognesi N° 123 — Oxapampa"
+                                             Icono="pin"
+                                             MensajeError="Ingrese la dirección." />
+
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <controls:CampoTexto x:Name="CampoTelefono"
+                                                 Grid.Column="0"
+                                                 Titulo="Teléfono"
+                                                 Marcador="999 999 999"
+                                                 Icono="phone"
+                                                 MensajeError="El teléfono debe tener 9 dígitos." />
+                            <controls:CampoTexto x:Name="CampoEmail"
+                                                 Grid.Column="1"
+                                                 Titulo="Correo electrónico"
+                                                 Marcador="correo@dominio.com"
+                                                 Icono="mail"
+                                                 MensajeError="Correo electrónico no válido." />
+                        </Grid>
+                    </StackPanel>
+                </controls:TarjetaSeccion>
+
+                <!-- ══════════ Cuenta bancaria ══════════ -->
+                <controls:TarjetaSeccion Titulo="Cuenta Bancaria · Autorización de CCI"
+                                         Descripcion="Entidad financiera y código interbancario para el abono."
+                                         Icono="bank">
+                    <StackPanel Spacing="14">
+                        <controls:CampoCombo x:Name="CampoBanco"
+                                             Titulo="Entidad Bancaria"
+                                             Ayuda="Seleccione la entidad donde se realizará el abono."
+                                             Icono="bank" />
+                        <controls:CampoTexto x:Name="CampoCci"
+                                             Titulo="Código de Cuenta Interbancario (CCI)"
+                                             Marcador="20 dígitos"
+                                             Ayuda="Solo números, exactamente 20 dígitos."
+                                             Icono="card"
+                                             MensajeError="El CCI debe tener 20 dígitos." />
+                    </StackPanel>
+                </controls:TarjetaSeccion>
+
+                <!-- ══════════ Propuesta económica ══════════ -->
+                <controls:TarjetaSeccion Titulo="Propuesta Económica"
+                                         Descripcion="Detalle del bien o servicio, monto y plazo de entrega."
+                                         Icono="receipt">
+                    <StackPanel Spacing="14">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <controls:CampoTexto x:Name="CampoNumeroPedido"
+                                                 Grid.Column="0"
+                                                 Titulo="Número de pedido"
+                                                 Marcador="Ej.: 001211 o 000123-A"
+                                                 Ayuda="Mismo número que en el TDR. Se completa al cargar el pedido o a mano."
+                                                 Obligatorio="False"
+                                                 Icono="id" />
+                        </Grid>
+
+                        <controls:CampoArea x:Name="CampoDescripcion"
+                                            Titulo="Descripción del bien / servicio"
+                                            Marcador="Detalle del servicio, locación o bien contratado…"
+                                            Altura="104" />
+
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <controls:CampoTexto x:Name="CampoMonto"
+                                                 Grid.Column="0"
+                                                 Titulo="Monto (S/)"
+                                                 Marcador="Ej.: 1500.00"
+                                                 Icono="dollar"
+                                                 MensajeError="Ingrese un monto mayor que cero."
+                                                 ToolTipService.ToolTip="Ingrese solo el número (decimales permitidos)." />
+                            <controls:CampoTexto x:Name="CampoDias"
+                                                 Grid.Column="1"
+                                                 Titulo="Plazo de entrega (días)"
+                                                 Marcador="Plazo máximo del servicio"
+                                                 Icono="clock"
+                                                 MensajeError="Ingrese un número de días válido." />
+                        </Grid>
+
+                        <!-- Resumen del monto: la franja de acento y el panel
+                             forman una sola pieza dentro de la misma rejilla,
+                             de modo que no pueden desalinearse entre sí. -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0"
+                                    Width="4"
+                                    CornerRadius="4,0,0,4"
+                                    Background="{ThemeResource Ga.Acento}" />
+                            <Border Grid.Column="1" Style="{StaticResource Ga.PanelMonto}">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="MONTO TOTAL" Style="{StaticResource Ga.RotuloTenue}" />
+                                    <TextBlock x:Name="MontoFormateado"
+                                               Text="S/ 0.00"
+                                               Style="{StaticResource Ga.MontoValor}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Resumen de la forma de pago tomada del TDR -->
+                        <Border Style="{StaticResource Ga.PanelInfo}">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="FORMA DE PAGO · TOMADA DEL TDR"
+                                           Style="{StaticResource Ga.RotuloPanel}" />
+                                <TextBlock x:Name="ResumenFormaPago"
+                                           Style="{StaticResource Ga.TextoPanel}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </controls:TarjetaSeccion>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ══════════ Barra de acciones ══════════ -->
+        <Border Grid.Row="1" Style="{StaticResource Ga.BarraAcciones}">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="EtiquetaVersion" Grid.Column="0"
+                           Style="{StaticResource Ga.VersionPie}"
+                           HorizontalAlignment="Left" />
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button Style="{StaticResource Ga.BotonSecundario}"
+                            Click="AlLimpiar"
+                            ToolTipService.ToolTip="Borrar los datos del formulario (Ctrl+L)">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <controls:Icono Nombre="eraser" Tamano="15" />
+                            <TextBlock Text="Limpiar" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource Ga.BotonSecundario}"
+                            Click="AlVistaPrevia"
+                            ToolTipService.ToolTip="Abrir una vista previa en Word (Ctrl+P)">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <controls:Icono Nombre="eye" Tamano="15" />
+                            <TextBlock Text="Vista previa" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource Ga.BotonPrimario}"
+                            Click="AlGenerar"
+                            ToolTipService.ToolTip="Generar el documento de Anexos">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <controls:Icono Nombre="file-check" Tamano="15"
+                                            Trazo="{ThemeResource Ga.SobreAcento}" />
+                            <TextBlock Text="Generar Anexos" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

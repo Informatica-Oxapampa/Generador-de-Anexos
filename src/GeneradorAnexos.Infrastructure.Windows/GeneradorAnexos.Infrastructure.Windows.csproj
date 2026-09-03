@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <RootNamespace>GeneradorAnexos.Infrastructure.Windows</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Versiones flotantes: NuGet resuelve la última de cada línea estable,
+         para no fallar por un número de parche que no exista en el equipo. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.*" />
+    <PackageReference Include="PdfPig" Version="0.1.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GeneradorAnexos.Application\GeneradorAnexos.Application.csproj" />
+    <ProjectReference Include="..\GeneradorAnexos.Domain\GeneradorAnexos.Domain.csproj" />
+  </ItemGroup>
+</Project>

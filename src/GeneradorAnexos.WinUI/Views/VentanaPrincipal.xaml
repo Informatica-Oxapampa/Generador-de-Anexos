@@ -1,0 +1,239 @@
+<!--
+    Views/VentanaPrincipal.xaml
+    ───────────────────────────
+    Estructura de la ventana, de arriba abajo:
+
+        1. Barra de título integrada (el contenido se extiende sobre ella):
+           escudo, nombre y descriptor de la aplicación. Los botones de
+           minimizar, maximizar y cerrar los sigue dibujando Windows.
+        2. Franja dorada institucional de 2 px.
+        3. NavigationView: el control de navegación estándar de Windows.
+           Se contrae solo a modo compacto o superpuesto cuando la ventana se
+           estrecha, y aporta accesibilidad, teclado y animaciones nativas.
+        4. Dentro del área de contenido: cabecera de sección (título,
+           descripción y fecha del documento) y la pila de páginas.
+-->
+<Window
+    x:Class="GeneradorAnexos.WinUI.Views.VentanaPrincipal"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:GeneradorAnexos.WinUI.Controls"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:views="using:GeneradorAnexos.WinUI.Views">
+
+    <!-- El fondo se declara aquí, con ThemeResource, y no desde código: así
+         cambia solo al alternar el tema de Windows y la ventana nunca se queda
+         sin pintar. Solo se retira si de verdad se aplicó el material Mica. -->
+    <Grid x:Name="Raiz" Background="{ThemeResource Ga.Ventana}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- ═══════════════ BARRA DE TÍTULO INTEGRADA ═══════════════ -->
+        <Border x:Name="BarraTitulo" Grid.Row="0" Style="{StaticResource Ga.Encabezado}">
+            <Grid Padding="14,0,0,0" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Style="{StaticResource Ga.LogoBadge}"
+                        VerticalAlignment="Center">
+                    <Image Source="ms-appx:///Assets/escudo.png"
+                           Width="22" Height="22"
+                           Stretch="Uniform" />
+                </Border>
+
+                <!-- Rejilla y no pila: así el descriptor recibe el ancho
+                     sobrante y se recorta con puntos suspensivos en lugar de
+                     invadir la zona de los botones de ventana. -->
+                <Grid Grid.Column="1" ColumnSpacing="10" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="TituloApp"
+                               Grid.Column="0"
+                               Style="{StaticResource Ga.TituloApp}"
+                               VerticalAlignment="Center" />
+                    <Border Grid.Column="1"
+                            Width="1" Height="14"
+                            Background="{ThemeResource Ga.PanelBorde}"
+                            VerticalAlignment="Center" />
+                    <TextBlock x:Name="DescriptorApp"
+                               Grid.Column="2"
+                               Style="{StaticResource Ga.SubtituloApp}"
+                               VerticalAlignment="Center" />
+                </Grid>
+
+                <!-- Reserva para los botones de ventana de Windows: evita que
+                     el texto quede por debajo de minimizar/maximizar/cerrar. -->
+                <Border x:Name="ReservaBotonesVentana" Grid.Column="2" Width="148" />
+            </Grid>
+        </Border>
+
+        <!-- Franja dorada institucional -->
+        <Border Grid.Row="1" Style="{StaticResource Ga.FranjaDorada}" />
+
+        <!-- ═══════════════ NAVEGACIÓN + CONTENIDO ═══════════════ -->
+        <muxc:NavigationView x:Name="Navegacion"
+                             Grid.Row="2"
+                             IsSettingsVisible="True"
+                             IsBackButtonVisible="Collapsed"
+                             IsTitleBarAutoPaddingEnabled="False"
+                             OpenPaneLength="228"
+                             SelectionChanged="AlCambiarSeccion"
+                             ItemInvoked="AlInvocarElemento">
+
+            <muxc:NavigationView.MenuItems>
+                <muxc:NavigationViewItem x:Name="SeccionTdr"
+                                         Tag="0"
+                                         Content="Términos de referencia"
+                                         ToolTipService.ToolTip="Términos de referencia (TDR)">
+                    <muxc:NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Document" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+
+                <muxc:NavigationViewItem x:Name="SeccionAnexos"
+                                         Tag="1"
+                                         Content="Anexos N° 06–09"
+                                         ToolTipService.ToolTip="Anexos N° 06 al 09">
+                    <muxc:NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Library" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+
+                <muxc:NavigationViewItem x:Name="SeccionUsuarios"
+                                         Tag="2"
+                                         Content="Registros guardados"
+                                         ToolTipService.ToolTip="Registros guardados">
+                    <muxc:NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="People" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+            </muxc:NavigationView.MenuItems>
+
+            <!-- Acciones globales sobre el registro de trabajo. Van al pie del
+                 panel para separarlas de la navegación y no cambian de sección
+                 al invocarse. En modo compacto se reducen solo al icono. -->
+            <muxc:NavigationView.FooterMenuItems>
+                <muxc:NavigationViewItem x:Name="ElementoNuevo"
+                                         Content="Nuevo registro"
+                                         SelectsOnInvoked="False"
+                                         ToolTipService.ToolTip="Empezar un registro nuevo y en blanco (Ctrl+N)">
+                    <muxc:NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Add" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+
+                <muxc:NavigationViewItem x:Name="ElementoGuardar"
+                                         Content="Guardar"
+                                         SelectsOnInvoked="False"
+                                         ToolTipService.ToolTip="Guardar los cambios en el registro activo (Ctrl+S)">
+                    <muxc:NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Save" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+
+                <muxc:NavigationViewItem x:Name="ElementoGuardarComo"
+                                         Content="Guardar como…"
+                                         SelectsOnInvoked="False"
+                                         ToolTipService.ToolTip="Guardar una copia con otro nombre (Ctrl+Mayús+S)">
+                    <muxc:NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Copy" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+            </muxc:NavigationView.FooterMenuItems>
+
+            <!-- ══════════════ Área de contenido ══════════════ -->
+            <Grid Background="{ThemeResource Ga.Fondo}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Cabecera de la sección activa -->
+                <Grid Grid.Row="0" Padding="24,22,24,14" ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="TituloSeccion"
+                                   Style="{StaticResource Ga.TituloPagina}" />
+                        <TextBlock x:Name="DescripcionSeccion"
+                                   Style="{StaticResource Ga.Intro}" />
+                    </StackPanel>
+
+                    <!-- Registro activo: indica sobre qué registro se guarda -->
+                    <Border x:Name="TarjetaRegistroActivo"
+                            Grid.Column="1"
+                            Style="{StaticResource Ga.TarjetaFecha}"
+                            VerticalAlignment="Center"
+                            MaxWidth="300">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <controls:Icono x:Name="IconoRegistroActivo"
+                                            Grid.Column="0"
+                                            Nombre="save"
+                                            Tamano="16"
+                                            Trazo="{ThemeResource Ga.Acento}"
+                                            VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Name="RegistroActivoEtiqueta"
+                                           Text="REGISTRO ACTIVO"
+                                           Style="{StaticResource Ga.FechaEtiqueta}" />
+                                <TextBlock x:Name="RegistroActivoValor"
+                                           Style="{StaticResource Ga.FechaValor}"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Fecha automática del documento (no editable) -->
+                    <Border Grid.Column="2"
+                            Style="{StaticResource Ga.TarjetaFecha}"
+                            VerticalAlignment="Center"
+                            ToolTipService.ToolTip="Fecha automática del día (no editable)">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <controls:Icono Grid.Column="0"
+                                            Nombre="calendar"
+                                            Tamano="16"
+                                            Trazo="{ThemeResource Ga.Acento}"
+                                            VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="FECHA DEL DOCUMENTO"
+                                           Style="{StaticResource Ga.FechaEtiqueta}" />
+                                <TextBlock x:Name="FechaValor"
+                                           Style="{StaticResource Ga.FechaValor}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- Pila de páginas -->
+                <Grid Grid.Row="1">
+                    <views:PaginaTdr x:Name="PaginaTdrVista" x:FieldModifier="public" />
+                    <views:PaginaAnexos x:Name="PaginaAnexosVista" x:FieldModifier="public" Visibility="Collapsed" />
+                    <views:PaginaUsuarios x:Name="PaginaUsuariosVista" x:FieldModifier="public" Visibility="Collapsed" />
+                    <views:PaginaConfiguracion x:Name="PaginaConfiguracionVista" x:FieldModifier="public" Visibility="Collapsed" />
+                </Grid>
+            </Grid>
+        </muxc:NavigationView>
+    </Grid>
+</Window>

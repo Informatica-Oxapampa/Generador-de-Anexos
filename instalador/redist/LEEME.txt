@@ -1,0 +1,17 @@
+Coloque aqui el archivo VC_redist.x64.exe si desea que el instalador incluya
+el paquete redistribuible de Microsoft Visual C++ 2015-2022 (x64).
+
+Descarga oficial:
+  https://aka.ms/vs/17/release/vc_redist.x64.exe
+
+Que ocurre segun el caso:
+
+  - Si el archivo esta presente, el instalador lo incorpora y lo ejecuta en
+    silencio SOLO en los equipos donde falte. Es la opcion recomendada para
+    distribuir a equipos que usted no controla.
+
+  - Si el archivo no esta, el instalador se genera igual, pero al ejecutarlo
+    en un equipo sin ese componente mostrara un aviso antes de continuar.
+
+El archivo no se incluye en el repositorio porque es un binario de Microsoft
+que debe descargarse desde su origen oficial.

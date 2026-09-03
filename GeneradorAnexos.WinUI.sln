@@ -1,0 +1,49 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeneradorAnexos.Domain", "src\GeneradorAnexos.Domain\GeneradorAnexos.Domain.csproj", "{07D0E20B-6B2D-4FAE-B23D-5330C2408F41}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeneradorAnexos.Application", "src\GeneradorAnexos.Application\GeneradorAnexos.Application.csproj", "{7859D07E-70DE-48CE-834D-6A83BFC3EE19}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeneradorAnexos.Infrastructure.Windows", "src\GeneradorAnexos.Infrastructure.Windows\GeneradorAnexos.Infrastructure.Windows.csproj", "{F8B8AC6F-895F-4549-9F43-B6C079887C7B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeneradorAnexos.WinUI", "src\GeneradorAnexos.WinUI\GeneradorAnexos.WinUI.csproj", "{2C9A5E41-8B0D-4E72-9E1A-53D7B6C40A11}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{07D0E20B-6B2D-4FAE-B23D-5330C2408F41}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{07D0E20B-6B2D-4FAE-B23D-5330C2408F41}.Debug|x64.Build.0 = Debug|Any CPU
+		{07D0E20B-6B2D-4FAE-B23D-5330C2408F41}.Release|x64.ActiveCfg = Release|Any CPU
+		{07D0E20B-6B2D-4FAE-B23D-5330C2408F41}.Release|x64.Build.0 = Release|Any CPU
+		{7859D07E-70DE-48CE-834D-6A83BFC3EE19}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7859D07E-70DE-48CE-834D-6A83BFC3EE19}.Debug|x64.Build.0 = Debug|Any CPU
+		{7859D07E-70DE-48CE-834D-6A83BFC3EE19}.Release|x64.ActiveCfg = Release|Any CPU
+		{7859D07E-70DE-48CE-834D-6A83BFC3EE19}.Release|x64.Build.0 = Release|Any CPU
+		{F8B8AC6F-895F-4549-9F43-B6C079887C7B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F8B8AC6F-895F-4549-9F43-B6C079887C7B}.Debug|x64.Build.0 = Debug|Any CPU
+		{F8B8AC6F-895F-4549-9F43-B6C079887C7B}.Release|x64.ActiveCfg = Release|Any CPU
+		{F8B8AC6F-895F-4549-9F43-B6C079887C7B}.Release|x64.Build.0 = Release|Any CPU
+		{2C9A5E41-8B0D-4E72-9E1A-53D7B6C40A11}.Debug|x64.ActiveCfg = Debug|x64
+		{2C9A5E41-8B0D-4E72-9E1A-53D7B6C40A11}.Debug|x64.Build.0 = Debug|x64
+		{2C9A5E41-8B0D-4E72-9E1A-53D7B6C40A11}.Debug|x64.Deploy.0 = Debug|x64
+		{2C9A5E41-8B0D-4E72-9E1A-53D7B6C40A11}.Release|x64.ActiveCfg = Release|x64
+		{2C9A5E41-8B0D-4E72-9E1A-53D7B6C40A11}.Release|x64.Build.0 = Release|x64
+		{2C9A5E41-8B0D-4E72-9E1A-53D7B6C40A11}.Release|x64.Deploy.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{07D0E20B-6B2D-4FAE-B23D-5330C2408F41} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{7859D07E-70DE-48CE-834D-6A83BFC3EE19} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{F8B8AC6F-895F-4549-9F43-B6C079887C7B} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{2C9A5E41-8B0D-4E72-9E1A-53D7B6C40A11} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+	EndGlobalSection
+EndGlobal

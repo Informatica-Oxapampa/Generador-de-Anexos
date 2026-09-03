@@ -1,0 +1,131 @@
+# ════════════════════════════════════════════════════════════════════════════
+#  Publicación de una versión SOLO de plantillas
+#
+#  Se dispara al crear una etiqueta con formato  plantillas-2.3.2
+#  Genera un paquete .zip con los .docx y un update.json que repite la versión
+#  del programa vigente, de modo que los equipos solo ven la actualización de
+#  plantillas y no vuelven a descargar el instalador completo.
+# ════════════════════════════════════════════════════════════════════════════
+name: Publicar plantillas
+
+on:
+  push:
+    tags:
+      - 'plantillas-[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      etiqueta:
+        description: 'Etiqueta a publicar, por ejemplo plantillas-1.0.1'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: windows-latest
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar los datos de la versión
+        id: datos
+        shell: pwsh
+        run: |
+          $etiqueta = if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $env:GITHUB_REF -replace 'refs/tags/', ''
+          } else {
+            '${{ github.event.inputs.etiqueta }}'
+          }
+          $plantVer = $etiqueta -replace '^plantillas-', ''
+
+          # version.txt del repositorio manda: debe coincidir con la etiqueta.
+          $declarada = (Get-Content 'plantillas/version.txt' -Raw).Trim()
+          if ($declarada -ne $plantVer) {
+            Write-Error "plantillas/version.txt dice $declarada pero la etiqueta es $plantVer. Igualelos antes de publicar."
+            exit 1
+          }
+
+          # Version del programa vigente, que el manifiesto debe repetir.
+          $csproj = 'src/GeneradorAnexos.WinUI/GeneradorAnexos.WinUI.csproj'
+          $appVer = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version |
+                     Where-Object { $_ } | Select-Object -First 1
+
+          "etiqueta=$etiqueta" >> $env:GITHUB_OUTPUT
+          "plantillas=$plantVer" >> $env:GITHUB_OUTPUT
+          "app=$appVer" >> $env:GITHUB_OUTPUT
+
+      - name: Localizar el instalador de la versión vigente del programa
+        id: app
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # El manifiesto debe seguir apuntando a un instalador que exista, para
+          # que un equipo con una version muy antigua pueda seguir actualizando.
+          $appVer = '${{ steps.datos.outputs.app }}'
+          $json = gh release view "v$appVer" --repo ${{ github.repository }} --json assets 2>$null
+          if (-not $json) {
+            Write-Error "No existe la Release v$appVer. Publique primero el programa."
+            exit 1
+          }
+          $assets = ($json | ConvertFrom-Json).assets
+          $setup = $assets | Where-Object { $_.name -like '*.exe' } | Select-Object -First 1
+          $manif = $assets | Where-Object { $_.name -eq 'update.json' } | Select-Object -First 1
+          if (-not $setup -or -not $manif) {
+            Write-Error "La Release v$appVer no tiene instalador o update.json."
+            exit 1
+          }
+          gh release download "v$appVer" --repo ${{ github.repository }} --pattern 'update.json' --dir anterior
+          "setup=$($setup.name)" >> $env:GITHUB_OUTPUT
+
+      - name: Empaquetar plantillas y escribir update.json
+        shell: pwsh
+        run: |
+          $etiqueta = '${{ steps.datos.outputs.etiqueta }}'
+          $plantVer = '${{ steps.datos.outputs.plantillas }}'
+          $appVer   = '${{ steps.datos.outputs.app }}'
+          $base     = "https://github.com/${{ github.repository }}/releases/download/$etiqueta"
+
+          New-Item -ItemType Directory -Force -Path salida | Out-Null
+          $zipPath = "salida\plantillas-$plantVer.zip"
+          Compress-Archive -Path plantillas\* -DestinationPath $zipPath -Force
+          $zip = Get-Item $zipPath
+
+          # El canal del programa se copia tal cual del manifiesto anterior:
+          # no cambia nada del instalador, solo las plantillas.
+          $anterior = Get-Content 'anterior/update.json' -Raw | ConvertFrom-Json
+
+          $manifiesto = [ordered]@{
+            manifiesto = 1
+            publicado  = (Get-Date).ToUniversalTime().ToString('o')
+            release    = $etiqueta
+            app        = $anterior.app
+            plantillas = [ordered]@{
+              version  = $plantVer
+              fecha    = (Get-Date).ToString('yyyy-MM-dd')
+              url      = "$base/$($zip.Name)"
+              sha256   = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash
+              tamano   = $zip.Length
+              archivos = @('plantilla_anexos.docx', 'plantilla_tdr.docx')
+              notas    = @()
+            }
+          }
+
+          $manifiesto | ConvertTo-Json -Depth 6 |
+            Set-Content 'salida\update.json' -Encoding utf8
+          "$((Get-FileHash $zip.FullName -Algorithm SHA256).Hash)  $($zip.Name)" |
+            Set-Content 'salida\SHA256SUMS.txt' -Encoding ascii
+          Get-Content 'salida\update.json'
+
+      - name: Crear la Release de plantillas
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.datos.outputs.etiqueta }}
+          name: Plantillas ${{ steps.datos.outputs.plantillas }}
+          draft: true
+          files: |
+            salida/plantillas-*.zip
+            salida/update.json
+            salida/SHA256SUMS.txt
