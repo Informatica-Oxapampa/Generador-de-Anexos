@@ -58,10 +58,6 @@ public static class ServiciosApp
     public static IOrderPdfReader LectorPedido { get; } = new OrderPdfReader();
 
     /// <summary>
-    /// Consulta del nombre por DNI. No envía datos hasta que el usuario o el
-    /// despliegue institucional configure un token del proveedor.
-    /// </summary>
-    /// <summary>
     /// Consulta de DNI. Permanece desactivada hasta integrar el servicio
     /// oficial de RENIEC: el botón «Validar» deriva el RUC localmente y avisa
     /// de que la consulta del nombre está en desarrollo.

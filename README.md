@@ -39,7 +39,7 @@ Para verificar la descarga, compare su resumen SHA-256 con el publicado en
 `SHA256SUMS.txt` de esa misma versión:
 
 ```powershell
-Get-FileHash .\GeneradorAnexos-1.0.0-Setup.exe -Algorithm SHA256
+Get-FileHash .\GeneradorAnexos-1.0.1-Setup.exe -Algorithm SHA256
 ```
 
 ## Actualizaciones
@@ -56,10 +56,8 @@ reinstalar el programa ni de permisos de administrador.
 | Documento | Contenido |
 |---|---|
 | [Cómo compilar](docs/COMO-COMPILAR.md) | Compilar el proyecto desde el código fuente |
-| [Cómo distribuir](docs/COMO-DISTRIBUIR.md) | Generar el instalador |
-| [Actualizaciones desde GitHub](docs/ACTUALIZACIONES-GITHUB.md) | Publicar versiones y plantillas |
-| [Seguridad de las actualizaciones](docs/SEGURIDAD-ACTUALIZACIONES.md) | Análisis de riesgos del actualizador |
-| [Notas técnicas](docs/notas-tecnicas/) | Decisiones de diseño no evidentes |
+| [Cómo distribuir](docs/COMO-DISTRIBUIR.md) | Instalador, GitHub y firma |
+| [Notas técnicas](docs/notas-tecnicas/) | PDF SIGA y temas |
 
 ## Estructura del proyecto
 
@@ -69,7 +67,7 @@ src/          Código fuente (.NET 8 · WinUI 3)
   ├── GeneradorAnexos.Application         Casos de uso e interfaces
   ├── GeneradorAnexos.Infrastructure.*    Word, PDF, base de datos, cifrado
   └── GeneradorAnexos.WinUI               Interfaz de usuario
-tests/        Pruebas
+tests/        Pruebas (dominio, pagos, sincronización y lector PDF)
 plantillas/   Plantillas de Word en blanco, con marcadores
 instalador/   Script de Inno Setup
 docs/         Documentación
@@ -82,7 +80,13 @@ compilar.cmd
 ```
 
 Requiere el SDK de .NET 8 y la carga de trabajo de Windows App SDK. El detalle
-está en [docs/COMO-COMPILAR.md](docs/COMO-COMPILAR.md).
+está en [docs/COMO-COMPILAR.md](docs/COMO-COMPILAR.md). `compilar.cmd` está en
+la **raíz** del repositorio.
+
+```bat
+dotnet run --project tests\GeneradorAnexos.Domain.Tests
+dotnet run --project tests\OrderPdfReader.Regression
+```
 
 ## Dónde se guardan los datos
 
@@ -96,9 +100,8 @@ de la infraestructura municipal**. Si encuentra algo de eso, avise según
 
 ## Licencia
 
-Pendiente de definir. Hasta que la Municipalidad Provincial de Oxapampa
-determine las condiciones de uso y reutilización de este software, se reservan
-todos los derechos.
+Pendiente de definir por la Municipalidad. Mientras tanto se reservan todos
+los derechos: ver [LICENSE.md](LICENSE.md).
 
 ## Contacto
 

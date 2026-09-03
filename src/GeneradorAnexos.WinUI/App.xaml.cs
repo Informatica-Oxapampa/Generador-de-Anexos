@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 using GeneradorAnexos.WinUI.Services;
 using GeneradorAnexos.WinUI.Views;
@@ -17,9 +18,13 @@ public partial class App : Microsoft.UI.Xaml.Application
     /// Nombre del mutex que declara el instalador en <c>AppMutex</c>. Mientras
     /// el programa esté abierto, el instalador y el desinstalador lo detectan y
     /// piden cerrarlo, en lugar de tropezar con archivos bloqueados y dejar
-    /// restos en la carpeta de instalación.
+    /// restos en la carpeta de instalación. También impide una segunda instancia.
     /// </summary>
     private const string NombreMutex = "GeneradorAnexos.MPO.OTI";
+
+    private const uint MensajeAceptar = 0x00000000;
+    private const uint IconoInformacion = 0x00000040;
+    private const uint PrimerPlano = 0x00010000;
 
     /// <summary>Se conserva viva durante todo el proceso a propósito.</summary>
     private static Mutex? _mutexInstancia;
@@ -28,9 +33,14 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     public App()
     {
-        InitializeComponent();
+        if (!ReclamarInstanciaUnica())
+        {
+            AvisarInstanciaExistente();
+            Environment.Exit(0);
+            return;
+        }
 
-        DeclararInstanciaEnEjecucion();
+        InitializeComponent();
 
         // main.py: sys.excepthook -> registra y avisa sin cerrar en silencio.
         UnhandledException += AlErrorNoControlado;
@@ -57,21 +67,54 @@ public partial class App : Microsoft.UI.Xaml.Application
     }
 
     /// <summary>
-    /// Publica un mutex con nombre para que el instalador sepa que la
-    /// aplicación está en ejecución. Si algo falla, se ignora: es solo una
-    /// ayuda para el instalador y nunca debe impedir que el programa arranque.
+    /// Toma el mutex con nombre. Si otra instancia ya lo posee, no arranca.
+    /// Si el mutex falla por otra causa, se permite el arranque: no debe
+    /// impedir el uso del programa.
     /// </summary>
-    private static void DeclararInstanciaEnEjecucion()
+    private static bool ReclamarInstanciaUnica()
     {
         try
         {
-            _mutexInstancia = new Mutex(initiallyOwned: false, NombreMutex);
+            _mutexInstancia = new Mutex(initiallyOwned: true, NombreMutex, out var creada);
+            if (creada)
+            {
+                return true;
+            }
+
+            _mutexInstancia.Dispose();
+            _mutexInstancia = null;
+            return false;
         }
-        catch (Exception excepcion)
+        catch (AbandonedMutexException)
         {
-            Registro.Error("APP_MUTEX_FAILED", excepcion);
+            // La instancia anterior murió sin soltar el mutex. Esta lo hereda.
+            return true;
+        }
+        catch (Exception)
+        {
+            return true;
         }
     }
+
+    private static void AvisarInstanciaExistente()
+    {
+        try
+        {
+            _ = MessageBoxW(
+                IntPtr.Zero,
+                "Generador de Anexos ya está abierto. Use esa ventana.",
+                "Generador de Anexos",
+                MensajeAceptar | IconoInformacion | PrimerPlano);
+        }
+        catch (Exception)
+        {
+            // Sin escritorio no hay aviso, pero igual no se abre otra instancia.
+        }
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern int MessageBoxW(IntPtr hWnd, string texto, string titulo, uint tipo);
 
     private void AlErrorNoControlado(
         object sender,
@@ -79,7 +122,6 @@ public partial class App : Microsoft.UI.Xaml.Application
     {
         Registro.Error("Error no controlado", e.Exception);
 
-        // El original mostraba un QMessageBox critico con un texto fijo.
         e.Handled = true;
         _ = ServicioDialogos.MostrarErrorAsync(
             "Error inesperado",

@@ -1,7 +1,7 @@
 @echo off
 REM ============================================================
 REM  Generador de Anexos - compilacion automatica a .exe
-REM  Doble clic sobre este archivo desde la carpeta winui
+REM  Doble clic sobre este archivo desde la carpeta raíz del repositorio
 REM ============================================================
 setlocal EnableExtensions
 cd /d "%~dp0"

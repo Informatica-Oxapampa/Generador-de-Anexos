@@ -9,56 +9,47 @@ El formato sigue [Semantic Versioning](https://semver.org/lang/es/):
 
 ---
 
-## [No publicado]
+## [1.0.1]
 
-### Cambiado
-
-- **Consulta de DNI retirada.** La versión anterior obtenía el nombre leyendo
-  los formularios públicos de un sitio privado, lo que implicaba enviar el DNI
-  de un ciudadano fuera de la entidad sin convenio ni base legal, y dependía de
-  que ese sitio no cambiara su maquetación. El botón «Validar» sigue derivando
-  el RUC de forma local con el algoritmo de SUNAT y avisa de que la consulta del
-  nombre se habilitará al integrar el servicio oficial de RENIEC.
-- **Áreas usuarias y entidades bancarias en `catalogos.json`.** Estaban fijas en
-  el código, de modo que un cambio en el ROF obligaba a recompilar y reinstalar
-  en todos los equipos. Ahora viajan en el paquete de plantillas: se actualizan
-  sin permisos de administrador y sin reiniciar el programa.
-- **Nombres de archivo con número de pedido y fecha.** Antes dos documentos de
-  la misma área o del mismo proveedor proponían el mismo nombre y el segundo
-  sobrescribía al primero.
-
-### Añadido
-
-- **Impresión directa con selección de impresora.** Tras generar un documento,
-  el diálogo ofrece «Imprimir». Se muestran las impresoras instaladas —locales y
-  de red—, el usuario elige una y el documento se envía a esa. Queda
-  preseleccionada la última utilizada o la predeterminada de Windows. La
-  impresión la ejecuta Word, de modo que el papel conserva exactamente los
-  márgenes, tablas, encabezados y saltos de página de la plantilla.
-- Comprobación de integridad de la base de registros en Configuración › Datos y
-  diagnóstico.
+Parche sobre la 1.0.0: correcciones de publicación, pruebas, instancia única y
+documentación. Las plantillas Word no cambian (siguen en 1.0.0).
 
 ### Corregido
 
-- **Generación atómica de documentos.** La plantilla se copiaba sobre el archivo
-  de destino y se editaba ahí: si la generación fallaba a medias quedaba un
-  documento corrupto y, al sobrescribir uno anterior válido, se perdía. Ahora se
-  compone en un archivo temporal y solo se coloca en su sitio al terminar.
-- **Errores al abrir documentos que pasaban desapercibidos.** Abrir el documento
-  generado no controlaba excepciones dentro de una tarea sin observar: si el
-  archivo se había movido o el equipo no tenía Word, al pulsar el botón no
-  ocurría nada. Ahora se informa con un mensaje que indica qué hacer.
-- **Mensajes técnicos en la interfaz.** Varios errores mostraban el texto de la
-  excepción, que podía incluir rutas internas del equipo o mensajes de SQLite.
-  El detalle pasa al registro de diagnóstico y al usuario se le explica el
-  problema en términos comprensibles.
+- **Rutas de documentación.** Los manuales y los scripts hablaban de `winui\compilar.cmd`
+  y `winui\publicado`. El repositorio tiene esos archivos en la raíz.
+- **Consulta DNI en el manual de compilación.** Seguía documentando ApiPeru.dev;
+  el código ya usa el servicio desactivado a la espera de RENIEC.
+- **Instancia única.** El mutex se publicaba pero no se reclamaba, así que se
+  podían abrir dos ventanas y picar el autoguardado. Ahora la segunda instancia
+  avisa y no arranca.
+- **Comentarios XML duplicados** en `ServiciosApp` y en el catálogo de áreas.
+- **Pruebas fuera de la solución.** Domain, pagos, sincronización y el lector
+  PDF entran en la `.sln` y corren en GitHub Actions en cada push.
+- **Paquetes NuGet con versión flotante.** Sqlite, OpenXML y PdfPig quedan
+  fijados para builds reproducibles.
+- **Firma opcional en `crear-instalador.cmd`.** El `SET` del Setup iba dentro
+  de un `if (...)` de CMD y no se veía la variable.
+- **MessageBoxW del aviso de instancia única** ahora busca `user32` solo en
+  System32, igual que el resto de P/Invoke.
+- **Un solo texto de forma de pago único**, el de dominio; Constantes ya no
+  duplica una redacción distinta.
+
+### Cambiado
+
+- **Estado compartido y sincronización TDR→Anexos** salen de WinUI y viven en
+  `GeneradorAnexos.Application.Sync`, para que las pruebas no arrastren la UI.
+
+### Añadido
+
+- [LICENSE.md](LICENSE.md) con reserva de derechos de la Municipalidad.
 
 ---
 
-## [1.0.0] — pendiente de publicación
+## [1.0.0]
 
-Primera versión oficial. Migración completa del aplicativo original en
-Python/PySide6 a .NET 8 con WinUI 3, conservando todas las funcionalidades.
+Primera versión (etiqueta en GitHub sin instalador). Migración completa del
+aplicativo original en Python/PySide6 a .NET 8 con WinUI 3.
 
 ### Funcionalidades
 

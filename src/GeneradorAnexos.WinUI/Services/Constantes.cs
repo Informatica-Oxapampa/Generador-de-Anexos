@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Reflection;
+using GeneradorAnexos.Domain.Payments;
 
 namespace GeneradorAnexos.WinUI.Services;
 
@@ -43,8 +44,7 @@ public static class Constantes
     public const int LongitudTelefono = 9;
 
     /// <summary>Texto por defecto de la forma de pago unica.</summary>
-    public const string TextoFormaPagoUnico =
-        "A la conformidad otorgada al Único Entregable.";
+    public const string TextoFormaPagoUnico = ConstructorPlanPagos.TextoFormaPagoUnico;
 
     /// <summary>
     /// Respaldo de entidades bancarias. El catálogo vigente vive en
@@ -87,7 +87,6 @@ public static class Constantes
         "No estar impedido para contratar con el Estado.",
     };
 
-    /// <summary>Unidades organicas de la MPO, para el autocompletado del area usuaria.</summary>
     /// <summary>
     /// Respaldo de áreas usuarias. El catálogo vigente vive en
     /// <c>catalogos.json</c> y lo sirve <see cref="ServicioCatalogos"/>; esta

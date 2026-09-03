@@ -12,16 +12,13 @@
     <UseWinUI>true</UseWinUI>
     <Nullable>enable</Nullable>
 
-    <!-- Version del producto (Semantic Versioning). Es el unico sitio donde se
-         cambia: la aplicacion la lee del ensamblado y el instalador comprueba
-         que coincide con la del ejecutable publicado.
-
-         Se mantiene en 1.0.0 durante toda la preparacion de la primera version
-         oficial. Las correcciones previas al lanzamiento NO incrementan el
-         numero: solo se sube despues de publicar la 1.0.0. -->
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <!-- Version del producto (Semantic Versioning). Es el unico sitio del
+         programa donde se cambia: la aplicacion la lee del ensamblado y el
+         instalador comprueba que coincide con la del ejecutable publicado.
+         El .iss debe llevar el mismo numero. -->
+    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
     <ImplicitUsings>enable</ImplicitUsings>
 
     <!-- Sin empaquetar y autocontenido: produce un .exe que arranca sin

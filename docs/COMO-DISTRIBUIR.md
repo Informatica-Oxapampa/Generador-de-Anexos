@@ -55,25 +55,45 @@ Con ese punto de partida, las opciones son:
 Doble clic en:
 
 ```text
-winui\crear-instalador.cmd
+crear-instalador.cmd
 ```
 
 El script hace dos cosas seguidas:
 
-1. Compila y publica la aplicación en `winui\publicado`.
+1. Compila y publica la aplicación en `publicado`.
 2. Empaqueta esa carpeta con Inno Setup.
 
 El resultado queda en:
 
 ```text
-winui\instalador\salida\GeneradorAnexos-1.0.0-Setup.exe
+instalador\salida\GeneradorAnexos-1.0.1-Setup.exe
 ```
 
-Ese **único archivo** es el que se entrega a los usuarios.
+Ese **único archivo** es el que se entrega a los usuarios (prueba local o red
+interna).
 
-> Si prefiere hacerlo por pasos: ejecute primero `compilar.cmd` y después
-> abra `instalador\GeneradorAnexos.iss` con Inno Setup y pulse **Compile**
-> (F9).
+Para que **todas las PC instaladas** se actualicen solas, hay que publicar en
+GitHub. Los commits normales no llegan a nadie: solo una etiqueta.
+
+1. Suba el código (`push` a `main`).
+2. En GitHub Desktop: **Repository › Create tag…** → `v1.0.1` → **Push**.
+   No reutilice el tag vacío `v1.0.0`.
+3. Espere el flujo **Publicar versión** (Actions). Genera el Setup, el
+   `update.json` y deja la Release **en borrador**.
+4. Abra **Releases**, revise el borrador y pulse **Publish release**
+   (marque *Set as the latest release*).
+
+El programa instalado consulta solo
+`…/releases/latest/download/update.json`. Hasta que publique el borrador,
+ningún equipo ve nada.
+
+Programa y plantillas van por separado: `v1.0.1` es el aplicativo;
+`plantillas/version.txt` (ahora `1.0.0`) es solo los Word. Corregir un texto
+del Anexo no obliga a bajar 240 MB.
+
+> Si prefiere hacerlo por pasos en local: ejecute primero `compilar.cmd` y
+> después abra `instalador\GeneradorAnexos.iss` con Inno Setup y pulse
+> **Compile** (F9).
 
 ---
 
@@ -102,6 +122,9 @@ Al desinstalar, el instalador pregunta si desea conservar o eliminar los
 registros guardados, los respaldos y las preferencias del usuario. Por defecto
 **se conservan**, de modo que una reinstalación o una actualización no pierde
 datos.
+
+El texto de la pantalla «Información» está en `instalador/informacion.rtf`.
+Se edita con WordPad; después vuelva a generar el Setup.
 
 ---
 
@@ -143,7 +166,7 @@ Con el certificado instalado, se firma así antes de distribuir:
 
 ```bat
 signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 ^
-  "instalador\salida\GeneradorAnexos-1.0.0-Setup.exe"
+  "instalador\salida\GeneradorAnexos-1.0.1-Setup.exe"
 ```
 
 Conviene firmar también `publicado\GeneradorAnexos.exe` **antes** de generar el

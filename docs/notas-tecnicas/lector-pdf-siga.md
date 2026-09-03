@@ -3,8 +3,8 @@
 ## Cómo usar esta versión
 
 1. Descomprima el ZIP en una carpeta nueva.
-2. Ejecute `winui\compilar.cmd`. Si falta .NET 8, el archivo lo descargará e instalará automáticamente para su usuario.
-3. Abra el programa recién generado en `winui\publicado`. No use un ejecutable antiguo.
+2. Ejecute `compilar.cmd` en la raíz del repositorio. Si falta .NET 8, el archivo lo descargará e instalará automáticamente para su usuario.
+3. Abra el programa recién generado en `publicado`. No use un ejecutable antiguo.
 4. En TDR, seleccione **Cargar Pedido** y después **Procesar**.
 5. Revise el resumen de campos completados y compruebe el TDR y Anexos antes de generar documentos.
 
@@ -61,7 +61,7 @@ También se compiló el código C# de la interfaz con las referencias y parciale
 
 ## Repetir las pruebas
 
-Desde la carpeta `winui`, con el SDK de .NET 8:
+Desde la raíz del repositorio, con el SDK de .NET 8:
 
 ```powershell
 dotnet run --project tests/OrderPdfReader.Regression/OrderPdfReader.Regression.csproj

@@ -89,6 +89,11 @@ jobs:
           if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
           & $iscc /Q instalador\GeneradorAnexos.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = Get-ChildItem 'instalador\salida\GeneradorAnexos-*-Setup.exe' -ErrorAction SilentlyContinue
+          if (-not $setup) {
+            Write-Error 'Inno Setup no genero el Setup.exe. Revise instalador/GeneradorAnexos.iss y la carpeta publicado.'
+            exit 1
+          }
 
       - name: Empaquetar las plantillas
         shell: pwsh

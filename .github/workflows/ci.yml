@@ -1,0 +1,27 @@
+# Comprobaciones en cada push y pull request.
+# No publica nada: solo restaura, compila las capas portables y corre pruebas.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  dominio-y-lector:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Pruebas de dominio, pagos y sincronización
+        run: dotnet run --project tests/GeneradorAnexos.Domain.Tests/GeneradorAnexos.Domain.Tests.csproj -c Release
+
+      - name: Regresión del lector PDF (sintéticos)
+        run: dotnet run --project tests/OrderPdfReader.Regression/OrderPdfReader.Regression.csproj -c Release

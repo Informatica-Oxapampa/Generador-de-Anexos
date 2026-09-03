@@ -5,14 +5,14 @@
 ;  Genera un unico Setup.exe con asistente de instalacion en espanol.
 ;
 ;  Requisitos para compilar este script:
-;    1. Haber ejecutado antes  winui\compilar.cmd   (crea winui\publicado)
+;    1. Haber ejecutado antes  compilar.cmd   (crea publicado\ en la raíz)
 ;    2. Tener instalado Inno Setup 6  ->  https://jrsoftware.org/isdl.php
 ;
-;  Forma facil de generarlo: doble clic en  winui\crear-instalador.cmd
+;  Forma facil de generarlo: doble clic en  crear-instalador.cmd
 ; ============================================================================
 
 #define MiNombre        "Generador de Anexos"
-#define MiVersion       "1.0.0"
+#define MiVersion       "1.0.1"
 #define MiPublicador    "Municipalidad Provincial de Oxapampa - Oficina de Tecnologia de la Informacion"
 #define MiUrl           "https://www.munioxapampa.gob.pe"
 #define MiEjecutable    "GeneradorAnexos.exe"

@@ -1,8 +1,5 @@
 using System.Text.Json;
-using GeneradorAnexos.Domain.Documents;
 using GeneradorAnexos.Infrastructure.Windows.Integrations;
-using GeneradorAnexos.Infrastructure.Windows.Security;
-using GeneradorAnexos.WinUI.Services;
 using UglyToad.PdfPig.Writer;
 using UglyToad.PdfPig.Core;
 using UglyToad.PdfPig.Fonts.Standard14Fonts;
@@ -58,7 +55,6 @@ foreach (var (file, values) in expected)
 }
 
 // PDF sinteticos temporales: mismo lector y misma biblioteca que produccion.
-// No se utiliza una reimplementacion del algoritmo en otro lenguaje.
 var temp = Path.Combine(Path.GetTempPath(), "OrderPdfRegression-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(temp);
 try
@@ -175,75 +171,12 @@ try
     await Throws<FileNotFoundException>("archivo inexistente", () => reader.ReadFirstPageAsync(Path.Combine(temp, "missing.pdf")));
     await Throws<InvalidOperationException>("PDF sin texto", () => reader.ReadFirstPageAsync(Make("vacio", empty: true)));
     await Throws<InvalidOperationException>("documento ajeno", () => reader.ReadFirstPageAsync(Make("ajeno", unrelated: true)));
-    // Cancelacion: sirve cualquier PDF valido, asi que se usa uno sintetico y la
-    // comprobacion no depende de tener los pedidos reales.
     await Throws<OperationCanceledException>("cancelacion", () => reader.ReadFirstPageAsync(
         Make("cancelacion"), new CancellationToken(true)));
 }
 finally
 {
     Directory.Delete(temp, recursive: true);
-}
-
-// Se prueba el servicio real de sincronización sin controles de WinUI.
-var origen = "PRIMER MOTIVO";
-var objeto = "";
-var cuadro = "";
-var anexos = "";
-var sync = new SincronizadorUnidireccional(() => origen);
-sync.Agregar("objeto", () => objeto, value => objeto = value);
-sync.Agregar("cuadro", () => cuadro, value => cuadro = value);
-sync.Agregar("anexos_desc", () => anexos, value => anexos = value);
-sync.Propagar();
-Equal("sincronización objeto", objeto, origen);
-Equal("sincronización cuadro", cuadro, origen);
-Equal("sincronización anexos", anexos, origen);
-objeto = "EDICIÓN MANUAL";
-sync.NotificarEdicion("objeto");
-origen = "SEGUNDO MOTIVO";
-sync.Propagar();
-Equal("conservar edición manual", objeto, "EDICIÓN MANUAL");
-Equal("actualizar cuadro no personalizado", cuadro, origen);
-Equal("actualizar anexos no personalizados", anexos, origen);
-var state = new EstadoCompartido();
-var numeroAnexos = "";
-state.NumeroPedidoCambiado += (_, change) => numeroAnexos = change.Texto;
-state.EstablecerNumeroPedido("000123-A");
-Equal("número compartido conserva ceros y sufijo", numeroAnexos, "000123-A");
-
-Equal("plazo numérico conserva cantidad", TdrLabels.ExtraerCantidadDias("30"), "30");
-Equal("plazo anterior recupera cantidad",
-    TdrLabels.ExtraerCantidadDias("Hasta treinta (30) días calendario"), "30");
-Equal("plazo agrega sufijo", TdrLabels.DiasConSufijo("30"), "30 días");
-Equal("plazo singular", TdrLabels.DiasConSufijo("1"), "1 día");
-Equal("plazo inválido queda vacío", TdrLabels.DiasConSufijo("sin plazo"), "");
-
-var metodosNativos = typeof(DpapiDataProtectionService).GetNestedType(
-    "NativeMethods", System.Reflection.BindingFlags.NonPublic);
-Equal("DPAPI sin punto de entrada RtlSecureZeroMemory",
-    (metodosNativos?.GetMethod(
-        "RtlSecureZeroMemory",
-        System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic) is null).ToString(),
-    bool.TrueString);
-
-void ComprobarDistribucion(int cantidad, params int[] esperados)
-{
-    var valores = TdrLabels.DistribuirPorcentajes(cantidad);
-    Equal($"distribución de {cantidad} pagos", string.Join(",", valores), string.Join(",", esperados));
-    Equal($"total de {cantidad} pagos", valores.Sum().ToString(), "100");
-}
-
-ComprobarDistribucion(1, 100);
-ComprobarDistribucion(2, 50, 50);
-ComprobarDistribucion(3, 33, 33, 34);
-ComprobarDistribucion(4, 25, 25, 25, 25);
-ComprobarDistribucion(6, 16, 16, 16, 16, 16, 20);
-
-for (var cantidad = 1; cantidad <= 100; cantidad++)
-{
-    var valores = TdrLabels.DistribuirPorcentajes(cantidad);
-    Equal($"cantidad de filas para {cantidad}", valores.Length.ToString(), cantidad.ToString());
-    Equal($"suma exacta para {cantidad}", valores.Sum().ToString(), "100");
 }
 
 Console.WriteLine($"TOTAL: {checks} comprobaciones correctas.");

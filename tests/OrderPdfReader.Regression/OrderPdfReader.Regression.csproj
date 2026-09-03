@@ -7,10 +7,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="PdfPig" Version="0.1.16" />
+    <ProjectReference Include="..\..\src\GeneradorAnexos.Application\GeneradorAnexos.Application.csproj" />
+    <ProjectReference Include="..\..\src\GeneradorAnexos.Domain\GeneradorAnexos.Domain.csproj" />
     <Compile Include="../../src/GeneradorAnexos.Infrastructure.Windows/Integrations/OrderPdfReader.cs" Link="OrderPdfReader.cs" />
-    <Compile Include="../../src/GeneradorAnexos.Application/Abstractions/Integrations/IOrderPdfReader.cs" Link="IOrderPdfReader.cs" />
-    <Compile Include="../../src/GeneradorAnexos.Domain/Documents/TdrLabels.cs" Link="TdrLabels.cs" />
-    <Compile Include="../../src/GeneradorAnexos.WinUI/Services/EstadoCompartido.cs" Link="EstadoCompartido.cs" />
     <None Update="Fixtures/*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -34,7 +34,7 @@ Cada versión publicada incluye `SHA256SUMS.txt` con el resumen del instalador.
 Antes de instalar un archivo descargado, puede comprobarlo en PowerShell:
 
 ```powershell
-Get-FileHash .\GeneradorAnexos-1.0.0-Setup.exe -Algorithm SHA256
+Get-FileHash .\GeneradorAnexos-1.0.1-Setup.exe -Algorithm SHA256
 ```
 
 El valor debe coincidir con el publicado. Si no coincide, **no lo ejecute** y

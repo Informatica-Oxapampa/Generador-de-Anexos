@@ -122,10 +122,9 @@ Windows 10.
 
 ## Versión
 
-Fijada en **1.0.0** y así permanece durante toda la preparación de la primera
-entrega. Está en un único sitio, `GeneradorAnexos.WinUI.csproj`; la aplicación
-la lee del ensamblado y el instalador comprueba que coincida. La documentación
-de publicación se actualizó a la numeración 1.0.x.
+La versión del programa está en un único sitio, `GeneradorAnexos.WinUI.csproj`
+(ahora **1.0.1**). La aplicación la lee del ensamblado y el instalador comprueba
+que coincida.
 
 ---
 

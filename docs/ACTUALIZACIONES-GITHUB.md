@@ -3,6 +3,11 @@
 Repositorio oficial:
 **<https://github.com/Informatica-Oxapampa/Generador-de-Anexos>**
 
+> **Versión actual del programa: 1.0.1.** La etiqueta `v1.0.0` de GitHub no
+> tiene instalador: no la reutilice. Suba este código, cree **solo** la
+> etiqueta `v1.0.1` y publique el borrador que genere Actions. No cree la
+> Release a mano.
+
 ---
 
 ## 1. Las dos cosas que hay que tener separadas
@@ -233,8 +238,8 @@ Formato `MAYOR.MENOR.PARCHE`, comparado numéricamente campo por campo (por eso
 | MENOR `1.0.1 → 1.1.0` | Funciones nuevas compatibles |
 | MAYOR `1.1.0 → 2.0.0` | Cambio importante o incompatible |
 
-> **Estado actual: v1.0.0.** No se incrementa nada hasta publicar oficialmente
-> la primera versión.
+> **Estado actual: v1.0.1** (parche sobre la 1.0.0). Las plantillas siguen en
+> `1.0.0` porque no cambiaron.
 
 Programa y plantillas se numeran por separado y no tienen por qué coincidir.
 

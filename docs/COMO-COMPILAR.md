@@ -21,14 +21,14 @@ El archivo `global.json` garantiza que el proyecto use la rama estable de
 
 ## Compilar
 
-Descomprima el ZIP y **haga doble clic en `winui\compilar.cmd`**.
+Descomprima el ZIP y **haga doble clic en `compilar.cmd`** (está en la raíz del repositorio).
 
 El script busca .NET 8, lo instala automáticamente si falta, descarga las
 dependencias y genera el programa. Al terminar abre sola la carpeta con el
 resultado:
 
 ```
-winui\publicado\GeneradorAnexos.exe
+publicado\GeneradorAnexos.exe
 ```
 
 Esa carpeta `publicado` es la que se copia al equipo del usuario final. Debe
@@ -37,20 +37,19 @@ incluida la subcarpeta `plantillas`).
 
 ## Consulta del nombre por DNI
 
-El RUC se calcula localmente y no requiere Internet. Para completar también el
-nombre, la primera pulsación de **Validar** solicita un token de ApiPeru.dev.
-El token se guarda cifrado con DPAPI y solo puede abrirlo la misma cuenta de
-Windows. Hasta que el usuario lo configure, la aplicación no envía el DNI a
-ningún proveedor externo.
+El RUC se calcula **localmente** (algoritmo de SUNAT) y no requiere Internet.
+La consulta automática del nombre está desactivada hasta integrar el servicio
+oficial de RENIEC. El botón **Validar** deriva el RUC 10 a partir del DNI y
+avisa de que el nombre se completará cuando exista ese convenio.
 
-En un despliegue administrado, OTI puede proporcionar el token mediante la
-variable de entorno `GENERADOR_ANEXOS_DNI_API_TOKEN`.
+No se envía el DNI a ningún proveedor externo. No hay token de ApiPeru ni
+variable de entorno que lo active en esta versión.
 
 ## Si prefiere usar Visual Studio
 
 Visual Studio es opcional. Para compilar desde él:
 
-1. Abra `winui\GeneradorAnexos.WinUI.sln`.
+1. Abra `GeneradorAnexos.WinUI.sln`.
 2. En la barra superior elija **Release** y **x64**.
 3. Clic derecho en el proyecto **GeneradorAnexos.WinUI** → **Publicar**.
 
