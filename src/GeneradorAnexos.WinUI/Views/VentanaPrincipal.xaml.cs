@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using GeneradorAnexos.Application.Sync;
+using EstadoCompartido = GeneradorAnexos.Application.Sync.EstadoCompartido;
 using GeneradorAnexos.Domain.Formatting;
 using GeneradorAnexos.WinUI.Services;
 using GeneradorAnexos.WinUI.Services.Actualizaciones;

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace GeneradorAnexos.Domain.Documents;
 
 /// <summary>
@@ -53,7 +55,9 @@ public static class TdrLabels
         var texto = valor?.Trim() ?? string.Empty;
         var digitos = new string(texto.SkipWhile(c => !char.IsDigit(c))
             .TakeWhile(char.IsDigit).Take(3).ToArray());
-        return int.TryParse(digitos, out var dias) && dias > 0 ? dias.ToString() : string.Empty;
+        return int.TryParse(digitos, NumberStyles.None, CultureInfo.InvariantCulture, out var dias) && dias > 0
+            ? dias.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
     }
 
     /// <summary>Convierte el valor numérico de la interfaz en «30 días».</summary>
