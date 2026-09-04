@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
 namespace GeneradorAnexos.WinUI.Controls;
@@ -63,7 +64,29 @@ public sealed partial class CampoCombo : UserControl, ICampo
 
     public static readonly DependencyProperty AyudaProperty =
         DependencyProperty.Register(nameof(Ayuda), typeof(string), typeof(CampoCombo),
-            new PropertyMetadata(string.Empty, (d, _) => ((CampoCombo)d).AplicarEstado(EstadoCampo.Neutro)));
+            new PropertyMetadata(string.Empty, (d, _) =>
+            {
+                var campo = (CampoCombo)d;
+                campo.AplicarEstado(EstadoCampo.Neutro);
+                campo.AplicarAccesibilidad();
+            }));
+
+    /// <summary>Longitud máxima de un valor escrito manualmente.</summary>
+    public int MaxLength
+    {
+        get => (int)GetValue(MaxLengthProperty);
+        set => SetValue(MaxLengthProperty, value);
+    }
+
+    /// <remarks>
+    /// AutoSuggestBox no expone MaxLength: esa propiedad pertenece al TextBox
+    /// que lleva dentro de su plantilla, al que no se puede llegar de forma
+    /// fiable. El límite se aplica recortando el texto en cuanto el usuario
+    /// escribe, que además cubre el pegado desde el portapapeles.
+    /// </remarks>
+    public static readonly DependencyProperty MaxLengthProperty =
+        DependencyProperty.Register(nameof(MaxLength), typeof(int), typeof(CampoCombo),
+            new PropertyMetadata(500, (d, _) => ((CampoCombo)d).AplicarLimite()));
 
     public bool Obligatorio
     {
@@ -203,13 +226,44 @@ public sealed partial class CampoCombo : UserControl, ICampo
     // ──────────────────────────── Internos ────────────────────────────
 
     private void RefrescarEtiqueta()
-        => Etiqueta.Text = Obligatorio ? $"{Titulo}  *" : Titulo;
+    {
+        Etiqueta.Text = Obligatorio ? $"{Titulo}  *" : Titulo;
+        AplicarAccesibilidad();
+    }
 
     private void AplicarModo()
     {
         Lista.Visibility = Editable ? Visibility.Collapsed : Visibility.Visible;
         Sugerencias.Visibility = Editable ? Visibility.Visible : Visibility.Collapsed;
+        AplicarLimite();
         AplicarIcono(Icono);
+        AplicarAccesibilidad();
+    }
+
+    /// <summary>
+    /// Recorta el texto del autocompletado al máximo permitido.
+    /// </summary>
+    /// <remarks>
+    /// Se hace aquí y no con la propiedad MaxLength del control porque
+    /// AutoSuggestBox no la tiene. Recortar en el evento cubre tanto lo que se
+    /// teclea como lo que se pega de golpe.
+    /// </remarks>
+    private void AplicarLimite()
+    {
+        var maximo = Math.Max(1, MaxLength);
+        if (Sugerencias.Text.Length > maximo)
+        {
+            Sugerencias.Text = Sugerencias.Text[..maximo];
+        }
+    }
+
+    private void AplicarAccesibilidad()
+    {
+        var nombre = string.IsNullOrWhiteSpace(Titulo) ? "Campo de selección" : Titulo;
+        AutomationProperties.SetName(Lista, nombre);
+        AutomationProperties.SetName(Sugerencias, nombre);
+        AutomationProperties.SetHelpText(Lista, Ayuda ?? string.Empty);
+        AutomationProperties.SetHelpText(Sugerencias, Ayuda ?? string.Empty);
     }
 
     /// <summary>
@@ -240,6 +294,7 @@ public sealed partial class CampoCombo : UserControl, ICampo
     {
         if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
         {
+            AplicarLimite();
             sender.ItemsSource = Filtrar(sender.Text);
         }
 

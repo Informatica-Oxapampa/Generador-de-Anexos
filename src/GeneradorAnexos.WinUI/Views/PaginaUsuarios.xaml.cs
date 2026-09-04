@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using GeneradorAnexos.Application.Abstractions.Persistence;
 using GeneradorAnexos.Domain.Documents;
@@ -18,6 +19,10 @@ namespace GeneradorAnexos.WinUI.Views;
 /// </summary>
 public sealed partial class PaginaUsuarios : UserControl
 {
+    private const int MaximoCaracteresBusqueda = 120;
+    private static readonly SemaphoreSlim SemaforoAutoguardado = new(1, 1);
+    private static readonly SemaphoreSlim SemaforoRefresco = new(1, 1);
+    private static readonly SemaphoreSlim SemaforoOperacionesRegistro = new(1, 1);
     private readonly ObservableCollection<RegistroVista> _visibles = new();
     private List<RegistroVista> _todos = new();
 
@@ -48,6 +53,10 @@ public sealed partial class PaginaUsuarios : UserControl
         catch (Exception excepcion)
         {
             Registro.Error("DB_INIT_FAILED", excepcion);
+            await ServicioDialogos.MostrarErrorAsync(
+                "Registros no disponibles",
+                "No se pudo abrir o migrar la base de registros. No se guardarán cambios " +
+                "hasta resolver el problema. Revise Datos y diagnóstico o contacte con la OTI.");
         }
     }
 
@@ -56,6 +65,7 @@ public sealed partial class PaginaUsuarios : UserControl
     /// <summary>Equivalente de <c>refrescar</c>.</summary>
     public async Task RefrescarAsync()
     {
+        await SemaforoRefresco.WaitAsync();
         try
         {
             var registros = await ServiciosApp.Registros.ListAsync(default);
@@ -63,29 +73,13 @@ public sealed partial class PaginaUsuarios : UserControl
 
             foreach (var resumen in registros)
             {
-                // El original inspecciona el contenido de cada registro para
-                // saber qué documentos puede generar; sin esto los botones
-                // «TDR» y «Anexo» quedarían habilitados por igual.
-                BorradorPayloadV1? contenido = null;
-                try
-                {
-                    contenido = await ServiciosApp.Registros.GetAsync(resumen.Id, default);
-                }
-                catch (Exception excepcion)
-                {
-                    // Un registro cuyo contenido no pueda abrirse debe seguir
-                    // visible para que el usuario pueda reemplazarlo o borrarlo.
-                    // Antes, una sola fila dañada vaciaba toda la sección.
-                    Registro.Error($"RECORD_CONTENT_READ_FAILED_{resumen.Id}", excepcion);
-                }
-
                 vistas.Add(new RegistroVista
                 {
                     Id = resumen.Id,
                     Nombre = resumen.Name,
                     Actualizado = resumen.UpdatedAt,
-                    TieneTdr = ContenidoRegistro.TieneTdr(contenido),
-                    TieneAnexo = ContenidoRegistro.TieneAnexo(contenido),
+                    TieneTdr = resumen.HasTdr,
+                    TieneAnexo = resumen.HasAnnex,
                 });
             }
 
@@ -96,6 +90,10 @@ public sealed partial class PaginaUsuarios : UserControl
             Registro.Error("DB_LIST_FAILED", excepcion);
             _todos = new List<RegistroVista>();
         }
+        finally
+        {
+            SemaforoRefresco.Release();
+        }
 
         AplicarFiltro(Buscador.Text);
         await ActualizarEstadoRespaldoAsync();
@@ -105,7 +103,14 @@ public sealed partial class PaginaUsuarios : UserControl
     {
         if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
         {
-            AplicarFiltro(sender.Text);
+            var consulta = sender.Text ?? string.Empty;
+            if (consulta.Length > MaximoCaracteresBusqueda)
+            {
+                consulta = consulta[..MaximoCaracteresBusqueda];
+                sender.Text = consulta;
+            }
+
+            AplicarFiltro(consulta);
         }
     }
 
@@ -135,6 +140,11 @@ public sealed partial class PaginaUsuarios : UserControl
             EstadoRespaldo.Text = info.LastBackupAt is null
                 ? $"Respaldos: {info.UniqueBackupCount}"
                 : $"Respaldos: {info.UniqueBackupCount} · último {info.LastBackupAt:dd/MM/yyyy HH:mm}";
+
+            if (!info.LastOperationSucceeded)
+            {
+                EstadoRespaldo.Text += " · ERROR EN EL ÚLTIMO RESPALDO";
+            }
         }
         catch (Exception excepcion)
         {
@@ -149,6 +159,9 @@ public sealed partial class PaginaUsuarios : UserControl
     public long? IdRegistroCargado => _registroCargadoId;
 
     public string NombreRegistroCargado => _registroCargadoNombre;
+
+    /// <summary>Nombre del registro activo, o cadena vacía si no hay ninguno.</summary>
+    public string NombreRegistroActivo => _registroCargadoNombre;
 
     /// <summary>Desvincula el registro cargado (al empezar un registro nuevo).</summary>
     public void OlvidarRegistroCargado() => EstablecerRegistroActivo(null, string.Empty);
@@ -165,7 +178,7 @@ public sealed partial class PaginaUsuarios : UserControl
         _ventana?.ActualizarRegistroActivo(_registroCargadoNombre);
     }
 
-    /// <summary>Nombre propuesto al guardar: razón social, o área del TDR.</summary>
+    /// <summary>Nombre propuesto al guardar una copia: razón social, o área del TDR.</summary>
     private string NombreSugerido()
     {
         var anexos = _ventana?.PaginaAnexosVista.ExportarEstado();
@@ -188,46 +201,187 @@ public sealed partial class PaginaUsuarios : UserControl
     // ═══════════════════════ Acciones ═══════════════════════
 
     /// <summary>
-    /// Acción «Guardar» (botón del panel y Ctrl+S).
+    /// Acción «Guardar» (botón del panel y Ctrl+S): actualiza exclusivamente
+    /// el registro activo y nunca solicita un nombre.
     /// </summary>
     /// <remarks>
-    /// Si ya hay un registro activo, los cambios se escriben directamente sobre
-    /// él sin preguntar nada. Solo se pide un nombre la primera vez, o si el
-    /// registro activo ya no existe porque se eliminó durante la sesión.
+    /// El nombre se solicita al ejecutar «Nuevo registro». Si no hay un registro
+    /// activo, se informa al usuario sin abrir el diálogo de nombre.
     /// </remarks>
     public async Task GuardarActualAsync()
+    {
+        if (!await SemaforoOperacionesRegistro.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            await GuardarActualCoreAsync();
+        }
+        finally
+        {
+            SemaforoOperacionesRegistro.Release();
+        }
+    }
+
+    private async Task GuardarActualCoreAsync()
     {
         if (_ventana is null)
         {
             return;
         }
 
-        if (_registroCargadoId is { } id)
+        if (_registroCargadoId is not { } id)
         {
-            if (await ExisteRegistroAsync(id))
-            {
-                await ActualizarRegistroAsync(id, _registroCargadoNombre);
-                return;
-            }
-
-            // El registro activo desapareció: se vuelve a tratar como nuevo.
-            EstablecerRegistroActivo(null, string.Empty);
-            Registro.Advertencia("RECORD_ACTIVE_MISSING");
+            await ServicioDialogos.MostrarAdvertenciaAsync(
+                "Guardar registro",
+                "No hay un registro activo. Use «Nuevo registro» para crear uno y asignarle un nombre.");
+            return;
         }
 
-        await GuardarComoAsync();
+        if (!await ExisteRegistroAsync(id))
+        {
+            EstablecerRegistroActivo(null, string.Empty);
+            Registro.Advertencia("RECORD_ACTIVE_MISSING");
+            await ServicioDialogos.MostrarAdvertenciaAsync(
+                "Guardar registro",
+                "El registro activo ya no existe. Use «Nuevo registro» para crear uno nuevo.");
+            return;
+        }
+
+        await ActualizarRegistroAsync(id, _registroCargadoNombre);
     }
 
     /// <summary>
-    /// Acción «Guardar como…» (Ctrl+Mayús+S) y también primer guardado.
+    /// Solicita el nombre y crea el registro que iniciará «Nuevo registro».
+    /// El formulario solo se limpia después de que el usuario confirma un
+    /// nombre disponible.
+    /// </summary>
+    /// <param name="prepararFormulario">
+    /// Acción que deja ambos formularios en blanco antes de capturar el
+    /// contenido inicial del nuevo registro.
+    /// </param>
+    /// <returns><c>true</c> si el registro fue creado.</returns>
+    public async Task<bool> CrearRegistroNuevoAsync(Action prepararFormulario)
+    {
+        if (!await SemaforoOperacionesRegistro.WaitAsync(0))
+        {
+            return false;
+        }
+
+        try
+        {
+            return await CrearRegistroNuevoCoreAsync(prepararFormulario);
+        }
+        finally
+        {
+            SemaforoOperacionesRegistro.Release();
+        }
+    }
+
+    private async Task<bool> CrearRegistroNuevoCoreAsync(Action prepararFormulario)
+    {
+        if (_ventana is null)
+        {
+            return false;
+        }
+
+        var sugerido = "Registro";
+
+        while (true)
+        {
+            var nombre = await ServicioDialogos.PedirTextoAsync(
+                "Guardar registro", "Nombre del registro:", sugerido);
+
+            if (nombre is null)
+            {
+                return false;
+            }
+
+            nombre = nombre.Trim();
+            if (nombre.Length == 0)
+            {
+                await ServicioDialogos.MostrarAdvertenciaAsync(
+                    "Nombre requerido", "Escriba un nombre para crear el registro.");
+                continue;
+            }
+
+            try
+            {
+                if (await ServiciosApp.Registros.FindIdByNameAsync(nombre, null, default) is not null)
+                {
+                    await ServicioDialogos.MostrarAdvertenciaAsync(
+                        "Nombre en uso",
+                        $"Ya existe un registro llamado «{nombre}». Elija otro nombre.");
+                    sugerido = nombre;
+                    continue;
+                }
+
+                var estadoAnterior = _ventana.RecolectarBorrador();
+                var idAnterior = _registroCargadoId;
+                var nombreAnterior = _registroCargadoNombre;
+                var habiaCambios = _ventana.HayCambiosSinGuardar();
+
+                long id;
+                try
+                {
+                    prepararFormulario();
+                    id = await ServiciosApp.Registros.CreateAsync(
+                        nombre, _ventana.RecolectarBorrador(), default);
+                }
+                catch
+                {
+                    // El formulario ya fue limpiado para formar el registro
+                    // nuevo. Si falla el guardado, se restaura exactamente el
+                    // trabajo anterior y su estado pendiente.
+                    _ventana.AplicarBorrador(
+                        estadoAnterior,
+                        marcarComoGuardado: !habiaCambios);
+                    EstablecerRegistroActivo(idAnterior, nombreAnterior);
+                    throw;
+                }
+
+                EstablecerRegistroActivo(id, nombre);
+                await EliminarAutoguardadoConfirmadoAsync();
+                _ventana.NotificarGuardado(nombre);
+                Registro.Info("RECORD_CREATE_OK");
+                await RefrescarAsync();
+                return true;
+            }
+            catch (Exception excepcion)
+            {
+                await AvisarFalloGuardadoAsync(excepcion);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Acción «Guardar como…» (Ctrl+Mayús+S).
     /// </summary>
     /// <remarks>
-    /// Pide siempre un nombre. Si todavía no hay registro activo, es el primer
-    /// guardado. Si ya lo hay, crea una copia con otro nombre: el registro
-    /// original queda intacto y la copia pasa a ser el registro activo, que es
-    /// como se comporta cualquier aplicación de escritorio.
+    /// Pide siempre un nombre y crea una copia. El registro original queda
+    /// intacto y la copia pasa a ser el registro activo.
     /// </remarks>
     public async Task GuardarComoAsync()
+    {
+        if (!await SemaforoOperacionesRegistro.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            await GuardarComoCoreAsync();
+        }
+        finally
+        {
+            SemaforoOperacionesRegistro.Release();
+        }
+    }
+
+    private async Task GuardarComoCoreAsync()
     {
         if (_ventana is null)
         {
@@ -270,6 +424,7 @@ public sealed partial class PaginaUsuarios : UserControl
                 nombre, _ventana.RecolectarBorrador(), default);
 
             EstablecerRegistroActivo(id, nombre);
+            await EliminarAutoguardadoConfirmadoAsync();
             _ventana.NotificarGuardado(nombre);
             Registro.Info("RECORD_CREATE_OK");
             await RefrescarAsync();
@@ -294,6 +449,7 @@ public sealed partial class PaginaUsuarios : UserControl
                 id, nombre, _ventana.RecolectarBorrador(), default);
 
             EstablecerRegistroActivo(id, nombre);
+            await EliminarAutoguardadoConfirmadoAsync();
             _ventana.NotificarGuardado(nombre);
             Registro.Info("RECORD_UPDATE_OK");
             await RefrescarAsync();
@@ -342,29 +498,106 @@ public sealed partial class PaginaUsuarios : UserControl
     {
         if (RegistroDe(sender) is { } vista)
         {
-            await CargarRegistroAsync(vista);
-            _ventana?.CambiarPestana(0);
+            if (await CargarRegistroAsync(vista))
+            {
+                _ventana?.CambiarPestana(0);
+            }
         }
     }
 
-    private async void AlGenerarTdr(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Abre el registro en la sección de TDR, sin generar nada.
+    /// </summary>
+    /// <remarks>
+    /// Antes estos botones cargaban el registro <i>y</i> generaban el documento
+    /// de inmediato, así que al pulsarlos aparecía sin aviso el cuadro de
+    /// Windows «Guardar como». El usuario pedía abrir un registro y se
+    /// encontraba guardando un archivo.
+    ///
+    /// Ahora solo cargan y llevan a la sección correspondiente. Generar sigue
+    /// siendo una decisión explícita, con su botón, después de revisar los
+    /// datos.
+    /// </remarks>
+    private async void AlAbrirEnTdr(object sender, RoutedEventArgs e)
     {
-        if (RegistroDe(sender) is { } vista && _ventana is not null)
+        if (RegistroDe(sender) is { } vista && _ventana is not null
+            && await CargarRegistroAsync(vista))
         {
-            await CargarRegistroAsync(vista);
-            await _ventana.PaginaTdrVista.GenerarAsync();
+            _ventana.CambiarPestana(0);
         }
     }
 
-    private async void AlGenerarAnexo(object sender, RoutedEventArgs e)
+    /// <summary>Abre el registro en la sección de Anexos, sin generar nada.</summary>
+    private async void AlAbrirEnAnexos(object sender, RoutedEventArgs e)
     {
-        if (RegistroDe(sender) is { } vista && _ventana is not null)
+        if (RegistroDe(sender) is { } vista && _ventana is not null
+            && await CargarRegistroAsync(vista))
         {
-            await CargarRegistroAsync(vista);
             _ventana.CambiarPestana(1);
-            await _ventana.PaginaAnexosVista.GenerarAsync();
         }
     }
+
+    /// <summary>
+    /// Crea una copia de un registro guardado, con otro nombre.
+    /// </summary>
+    /// <remarks>
+    /// Sustituye al antiguo «Guardar como…» del panel lateral, que se confundía
+    /// con «Guardar». Aquí actúa sobre el registro de la fila, no sobre el
+    /// formulario abierto: el original queda intacto y el registro activo no
+    /// cambia. Para trabajar sobre la copia basta con cargarla.
+    /// </remarks>
+    private async void AlDuplicar(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not RegistroVista vista)
+        {
+            return;
+        }
+
+        var nombre = await ServicioDialogos.PedirTextoAsync(
+            "Duplicar registro", "Nombre de la copia:", $"{vista.Nombre} (copia)");
+
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            return;
+        }
+
+        nombre = nombre.Trim();
+
+        try
+        {
+            if (await ServiciosApp.Registros.FindIdByNameAsync(nombre, null, default) is not null)
+            {
+                await ServicioDialogos.MostrarAdvertenciaAsync(
+                    "Nombre en uso",
+                    $"Ya existe un registro llamado «{nombre}». Elija otro nombre.");
+                return;
+            }
+
+            var datos = await ServiciosApp.Registros.GetAsync(vista.Id, default);
+            if (datos is null)
+            {
+                await ServicioDialogos.MostrarAdvertenciaAsync(
+                    "Duplicar registro",
+                    "No se pudo leer el registro original. Actualice la lista e inténtelo de nuevo.");
+                return;
+            }
+
+            await ServiciosApp.Registros.CreateAsync(nombre, datos, default);
+            Registro.Info("RECORD_DUPLICATED");
+            await RefrescarAsync();
+        }
+        catch (Exception excepcion)
+        {
+            Registro.Error("RECORD_DUPLICATE_FAILED", excepcion);
+            await ServicioDialogos.MostrarErrorAsync(
+                "Duplicar registro",
+                "No se pudo crear la copia. Inténtelo de nuevo.");
+        }
+    }
+
+    /// <summary>Guarda el formulario abierto como un registro nuevo.</summary>
+    private async void AlGuardarComoNuevo(object sender, RoutedEventArgs e)
+        => await GuardarComoAsync();
 
     private async void AlRenombrar(object sender, RoutedEventArgs e)
     {
@@ -383,6 +616,14 @@ public sealed partial class PaginaUsuarios : UserControl
 
         try
         {
+            if (await ServiciosApp.Registros.FindIdByNameAsync(nombre, vista.Id, default) is not null)
+            {
+                await ServicioDialogos.MostrarAdvertenciaAsync(
+                    "Nombre en uso",
+                    $"Ya existe un registro llamado «{nombre}». Elija otro nombre.");
+                return;
+            }
+
             await ServiciosApp.Registros.RenameAsync(vista.Id, nombre, default);
             if (_registroCargadoId == vista.Id)
             {
@@ -433,8 +674,19 @@ public sealed partial class PaginaUsuarios : UserControl
         }
     }
 
-    private async Task CargarRegistroAsync(RegistroVista vista)
+    private async Task<bool> CargarRegistroAsync(RegistroVista vista)
     {
+        if (_ventana is null)
+        {
+            return false;
+        }
+
+        if (_registroCargadoId != vista.Id && _ventana.HayCambiosSinGuardar() &&
+            !await _ventana.ConfirmarCambiosAntesDeAsync("abrir otro registro"))
+        {
+            return false;
+        }
+
         try
         {
             var datos = await ServiciosApp.Registros.GetAsync(vista.Id, default);
@@ -443,12 +695,14 @@ public sealed partial class PaginaUsuarios : UserControl
                 await ServicioDialogos.MostrarAdvertenciaAsync(
                     "Cargar registro", "El registro ya no existe.");
                 await RefrescarAsync();
-                return;
+                return false;
             }
 
-            _ventana?.AplicarBorrador(datos);
+            // conservarFecha: false → el documento nuevo lleva la fecha de hoy.
+            _ventana.AplicarBorrador(datos, marcarComoGuardado: true, conservarFecha: false);
             EstablecerRegistroActivo(vista.Id, vista.Nombre);
             await RefrescarAsync();
+            return true;
         }
         catch (Exception excepcion)
         {
@@ -458,6 +712,7 @@ public sealed partial class PaginaUsuarios : UserControl
                 "No se pudo abrir el registro guardado." + Environment.NewLine + Environment.NewLine
                 + "Puede que se haya dañado o que se guardara con otra cuenta de "
                 + "Windows. Existe una copia de seguridad en la carpeta de datos.");
+            return false;
         }
     }
 
@@ -467,8 +722,22 @@ public sealed partial class PaginaUsuarios : UserControl
     // ═══════════════════════ Autoguardado ═══════════════════════
 
     /// <summary>Guarda el borrador cifrado de la sesión (cada 45 s).</summary>
-    public static void Autoguardar(BorradorPayloadV1 borrador)
-        => _ = ServiciosApp.Borradores.SaveAutosaveAsync(borrador, default);
+    public static async Task AutoguardarAsync(BorradorPayloadV1 borrador)
+    {
+        if (!await SemaforoAutoguardado.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            await ServiciosApp.Borradores.SaveAutosaveAsync(borrador, default);
+        }
+        finally
+        {
+            SemaforoAutoguardado.Release();
+        }
+    }
 
     /// <summary>Ofrece recuperar el trabajo si quedó un borrador de la última sesión.</summary>
     private async Task OfrecerRecuperarAsync()
@@ -490,7 +759,15 @@ public sealed partial class PaginaUsuarios : UserControl
             if (recuperar)
             {
                 var resultado = await ServiciosApp.Borradores.ReadAutosaveAsync(default);
-                _ventana?.AplicarBorrador(resultado?.Payload);
+                if (resultado?.Payload is null)
+                {
+                    await ServicioDialogos.MostrarAdvertenciaAsync(
+                        "Recuperar trabajo", "El borrador está vacío o no tiene un formato válido.");
+                    return;
+                }
+
+                OlvidarRegistroCargado();
+                _ventana?.AplicarBorrador(resultado.Payload, marcarComoGuardado: false);
             }
             else
             {
@@ -502,6 +779,18 @@ public sealed partial class PaginaUsuarios : UserControl
             Registro.Error("AUTOSAVE_RECOVER_FAILED", excepcion);
             await ServicioDialogos.MostrarAdvertenciaAsync(
                 "Recuperar trabajo", "No se pudo recuperar el borrador anterior.");
+        }
+    }
+
+    private static async Task EliminarAutoguardadoConfirmadoAsync()
+    {
+        try
+        {
+            await ServiciosApp.Borradores.DeleteAutosaveAsync(default);
+        }
+        catch (Exception excepcion)
+        {
+            Registro.Error("AUTOSAVE_DELETE_AFTER_SAVE_FAILED", excepcion);
         }
     }
 }

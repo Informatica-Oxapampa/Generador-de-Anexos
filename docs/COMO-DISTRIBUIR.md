@@ -1,205 +1,86 @@
-# Cómo distribuir e instalar el programa en otras PC
+# Cómo distribuir e instalar el programa
 
-Este documento explica cómo generar un `Setup.exe` con asistente de
-instalación y entregarlo a otras personas.
+La versión 1.0.3 se publica como aplicación WinUI 3 sin empaquetar,
+autocontenida y x64. El equipo de destino no necesita instalar .NET ni Windows
+App SDK por separado.
 
----
+## Requisitos del equipo de compilación
 
-## 1. Qué tipo de instalador corresponde a este proyecto
+- Windows 10/11 x64.
+- SDK oficial de .NET 8.
+- Inno Setup 6.
+- SignTool del Windows SDK.
+- Certificado institucional de firma de código vigente, exportado como PFX.
+- Redistribuible oficial `VC_redist.x64.exe` en `instalador\redist\`.
 
-El proyecto está configurado como **aplicación de escritorio sin empaquetar y
-autocontenida**:
-
-```xml
-<WindowsPackageType>None</WindowsPackageType>
-<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-<SelfContained>true</SelfContained>
-```
-
-Eso significa que al publicar se obtiene una carpeta con el `.exe` y **todas**
-sus dependencias dentro: el runtime de .NET 8, el Windows App SDK, los recursos
-de WinUI (`.pri`, `.xbf`), la carpeta `Assets` y la carpeta `plantillas`. El
-equipo de destino no necesita instalar .NET ni el Windows App SDK.
-
-Con ese punto de partida, las opciones son:
-
-| Opción | Veredicto |
-|---|---|
-| **Inno Setup 6** | **Recomendada.** Gratuita, produce un solo `Setup.exe`, asistente clásico de Windows, permite elegir carpeta, accesos directos opcionales y aparece en Configuración › Aplicaciones. Ideal para una app autocontenida. |
-| MSIX / paquete de la Store | Requiere firma digital obligatoria y cambiaría el modelo de despliegue del proyecto (`WindowsPackageType`), además de mover la ruta de datos. No conviene aquí. |
-| WiX Toolset (MSI) | Potente y apto para despliegue por directiva de grupo, pero mucho más laborioso. Reserve esta vía si más adelante el área de sistemas necesita instalación masiva por GPO/Intune. |
-| ClickOnce | Pensado para actualizaciones automáticas desde un servidor; no genera un instalador clásico y encaja mal con WinUI 3 sin empaquetar. |
-
-**Conclusión: Inno Setup 6.** El script ya está escrito en
-`instalador\GeneradorAnexos.iss`.
-
----
-
-## 2. Preparación (una sola vez, solo en su equipo)
-
-1. Descargue e instale **Inno Setup 6** desde <https://jrsoftware.org/isdl.php>.
-   Es gratuito. Solo hace falta en el equipo donde usted genera el instalador,
-   no en los equipos de los usuarios.
-2. *(Recomendado)* Descargue **VC_redist.x64.exe** desde
-   <https://aka.ms/vs/17/release/vc_redist.x64.exe> y colóquelo en
-   `instalador\redist\`.
-   El tiempo de ejecución autocontenido del Windows App SDK depende del
-   redistribuible de Visual C++. Casi todos los equipos con Windows 10/11 ya lo
-   tienen, pero incluirlo evita sorpresas: el instalador lo ejecutará en
-   silencio **solo** en los equipos donde falte.
-
----
-
-## 3. Generar el `Setup.exe`
-
-Doble clic en:
-
-```text
-crear-instalador.cmd
-```
-
-El script hace dos cosas seguidas:
-
-1. Compila y publica la aplicación en `publicado`.
-2. Empaqueta esa carpeta con Inno Setup.
-
-El resultado queda en:
-
-```text
-instalador\salida\GeneradorAnexos-1.0.1-Setup.exe
-```
-
-Ese **único archivo** es el que se entrega a los usuarios (prueba local o red
-interna).
-
-Para que **todas las PC instaladas** se actualicen solas, hay que publicar en
-GitHub. Los commits normales no llegan a nadie: solo una etiqueta.
-
-1. Suba el código (`push` a `main`).
-2. En GitHub Desktop: **Repository › Create tag…** → `v1.0.1` → **Push**.
-   No reutilice el tag vacío `v1.0.0`.
-3. Espere el flujo **Publicar versión** (Actions). Genera el Setup, el
-   `update.json` y deja la Release **en borrador**.
-4. Abra **Releases**, revise el borrador y pulse **Publish release**
-   (marque *Set as the latest release*).
-
-El programa instalado consulta solo
-`…/releases/latest/download/update.json`. Hasta que publique el borrador,
-ningún equipo ve nada.
-
-Programa y plantillas van por separado: `v1.0.1` es el aplicativo;
-`plantillas/version.txt` (ahora `1.0.0`) es solo los Word. Corregir un texto
-del Anexo no obliga a bajar 240 MB.
-
-> Si prefiere hacerlo por pasos en local: ejecute primero `compilar.cmd` y
-> después abra `instalador\GeneradorAnexos.iss` con Inno Setup y pulse
-> **Compile** (F9).
-
----
-
-## 4. Qué hace el instalador en el equipo del usuario
-
-- Asistente en español, con pantalla de bienvenida, información del programa,
-  selección de carpeta, selección de accesos directos y pantalla final.
-- Muestra nombre, versión y entidad responsable durante todo el proceso.
-- Pregunta si desea instalar **para todos los usuarios** (requiere permisos de
-  administrador) o **solo para el usuario actual** (no requiere permisos).
-- Permite **elegir la carpeta de instalación**.
-- Crea siempre el acceso directo en el **Menú Inicio**.
-- Crea el acceso directo en el **Escritorio** solo si el usuario marca la
-  casilla correspondiente.
-- Copia el ejecutable, el runtime, los recursos de WinUI y la carpeta
-  `plantillas`, respetando la estructura de subcarpetas.
-- Instala el redistribuible de Visual C++ únicamente si falta (si usted lo
-  incluyó en `instalador\redist\`).
-- Registra el programa en **Configuración › Aplicaciones › Aplicaciones
-  instaladas**, desde donde puede desinstalarse.
-- Ofrece iniciar el programa al terminar.
-- No abre ninguna ventana de consola, ni durante la instalación ni al ejecutar
-  la aplicación: el proyecto se compila como `WinExe`.
-
-Al desinstalar, el instalador pregunta si desea conservar o eliminar los
-registros guardados, los respaldos y las preferencias del usuario. Por defecto
-**se conservan**, de modo que una reinstalación o una actualización no pierde
-datos.
-
-El texto de la pantalla «Información» está en `instalador/informacion.rtf`.
-Se edita con WordPad; después vuelva a generar el Setup.
-
----
-
-## 5. Actualizar a una versión posterior
-
-1. Cambie `AppVersion` en el `.iss` y la versión que muestra la aplicación.
-2. Vuelva a ejecutar `crear-instalador.cmd`.
-3. Entregue el nuevo `Setup.exe`.
-
-El usuario lo ejecuta encima de la instalación existente y el programa se
-actualiza en el mismo sitio. Esto funciona porque `AppId` es un identificador
-fijo:
-
-```ini
-AppId={{7F2C6A18-4D9B-4C3E-9A61-3B8E5D2F71C4}
-```
-
-**No cambie nunca ese valor.** Si lo cambia, Windows tratará la nueva versión
-como un programa distinto y quedarán dos entradas en Aplicaciones instaladas.
-
-Los datos del usuario viven en `%LOCALAPPDATA%\GeneradorAnexos` y no se tocan
-al actualizar.
-
----
-
-## 6. Firma digital y SmartScreen
-
-Este es el punto que más llama la atención al entregar el instalador y conviene
-anticiparlo:
-
-Al ejecutar un `.exe` descargado y sin firmar, Windows muestra la advertencia
-azul **«Windows protegió su PC»** de SmartScreen. El usuario puede continuar con
-*Más información › Ejecutar de todas formas*, pero da mala impresión en un
-entorno institucional.
-
-Para eliminarla hace falta un **certificado de firma de código** (Sectigo,
-DigiCert, GlobalSign u otra autoridad; los de tipo OV/EV son de pago y anuales).
-Con el certificado instalado, se firma así antes de distribuir:
+El PFX y su contraseña no se guardan en el repositorio. Antes de compilar,
+configure para esa consola:
 
 ```bat
-signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 ^
-  "instalador\salida\GeneradorAnexos-1.0.1-Setup.exe"
+set GENERADOR_ANEXOS_SIGN_PFX=C:\ruta-segura\codigo.pfx
+set GENERADOR_ANEXOS_SIGN_PASSWORD=contraseña
 ```
 
-Conviene firmar también `publicado\GeneradorAnexos.exe` **antes** de generar el
-instalador, para que el ejecutable instalado quede firmado igualmente.
+Obtenga la huella SHA-256 del certificado y agréguela a
+`FirmantesPermitidosSha256` en
+`ConfiguracionActualizaciones.cs`. `validar-certificado-firma.ps1` comprueba
+que el PFX sea vigente, permita firma de código, tenga clave privada y coincida
+con esa huella. La lista vacía mantiene deshabilitadas las actualizaciones
+automáticas.
 
-Sin certificado, la alternativa práctica dentro de la municipalidad es
-distribuir el instalador por la red interna o por una carpeta compartida en
-lugar de por descarga desde Internet, y avisar a los usuarios de la advertencia.
+## Crear el instalador local
 
----
+Ejecute `crear-instalador.cmd`. El proceso:
 
-## 7. Comprobación antes de entregar
+1. valida el certificado y su huella fijada;
+2. compila desde una carpeta `publicado` limpia;
+3. firma y verifica `GeneradorAnexos.exe`;
+4. genera el instalador con Inno Setup;
+5. firma y verifica el instalador.
 
-Recomiendo probar en un equipo distinto al de desarrollo, idealmente uno donde
-nunca se haya instalado Visual Studio ni .NET:
+El resultado es:
 
-1. Ejecutar el `Setup.exe` y completar el asistente.
-2. Comprobar que el acceso directo del Menú Inicio abre el programa.
-3. Generar un TDR y un Anexo de prueba (verifica que la carpeta `plantillas`
-   se instaló correctamente).
-4. Guardar un registro y volver a abrir el programa (verifica la base de datos
-   y el cifrado DPAPI en ese equipo).
-5. Desinstalar desde Configuración › Aplicaciones y confirmar que la carpeta de
-   instalación queda limpia.
+```text
+instalador\salida\GeneradorAnexos-1.0.3-Setup.exe
+```
 
----
+Nunca distribuya el archivo si el script termina con error. No existe una ruta
+de publicación sin firma.
 
-## 8. Problemas frecuentes
+## Comportamiento del instalador
 
-| Síntoma | Causa | Solución |
-|---|---|---|
-| `#error No se encontro ..\publicado\GeneradorAnexos.exe` al compilar el `.iss` | No se publicó la aplicación | Ejecute `compilar.cmd` antes, o use `crear-instalador.cmd`, que lo hace solo |
-| `NO SE ENCONTRO INNO SETUP 6` | Falta Inno Setup en su equipo | Instálelo desde jrsoftware.org |
-| El programa instalado no abre y no muestra nada | Falta el redistribuible de Visual C++ | Incluya `VC_redist.x64.exe` en `instalador\redist\` y regenere el instalador |
-| «Error al generar el documento» en el equipo destino | La carpeta `plantillas` no se copió | Verifique que existe `{carpeta de instalación}\plantillas` con los dos `.docx` |
-| El instalador no arranca en un equipo | Windows de 32 bits o anterior a la versión 2004 | La aplicación requiere Windows 10 2004 (19041) de 64 bits o superior |
+- Instala únicamente para todo el equipo en
+  `C:\Program Files\Generador de Anexos` y solicita UAC.
+- Requiere Windows 10 2004 (19041) o posterior y arquitectura x64.
+- Crea el acceso del Menú Inicio y ofrece uno de Escritorio.
+- Registra la aplicación en Configuración y Panel de control.
+- Solo intenta cerrar `GeneradorAnexos.exe`, no otros procesos.
+- Comprueba el runtime de Visual C++; si falta y el redistribuible no fue
+  incluido, cancela la instalación para no dejar un programa inutilizable.
+- Actualiza siempre el mismo producto porque conserva su `AppId`.
+- El desinstalador elimina solo los archivos que instaló. Nunca borra datos del
+  perfil del usuario ni aplica un borrado recursivo sobre `{app}`.
+
+Los registros, respaldos, preferencias, borradores y plantillas descargadas se
+guardan en `%LOCALAPPDATA%\GeneradorAnexos`.
+
+## Lista de comprobación
+
+Antes de publicar, pruebe el instalador en una máquina limpia:
+
+1. Verifique en Propiedades que el Setup y el EXE tengan firma válida.
+2. Instale, abra y genere un TDR y un Anexo.
+3. Cree, cierre, reabra y actualice un registro.
+4. Simule cambios sin guardar y confirme las tres opciones del diálogo.
+5. Compruebe actualización y conservación de datos.
+6. Desinstale y confirme que solo desaparece la carpeta del programa.
+
+## Errores que detienen la publicación
+
+| Error | Acción |
+|---|---|
+| Falta SDK de .NET 8 | Instale el SDK oficial y vuelva a ejecutar el script. |
+| Falta VC++ Redistributable | Añada el instalador oficial a `instalador\redist`. |
+| Falta SignTool o Inno Setup | Instale Windows SDK o Inno Setup 6. |
+| Certificado ausente, vencido o no fijado | Corrija los secretos y la huella; no omita la comprobación. |
+| Versión del EXE distinta de `MiVersion` | Iguale ambos valores antes de crear el Setup. |

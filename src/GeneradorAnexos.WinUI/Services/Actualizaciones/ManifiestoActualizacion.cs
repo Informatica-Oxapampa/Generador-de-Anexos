@@ -10,11 +10,9 @@ namespace GeneradorAnexos.WinUI.Services.Actualizaciones;
 /// publicada en GitHub Releases.
 /// </summary>
 /// <remarks>
-/// Un solo manifiesto describe los <b>dos canales</b>: el programa y las
-/// plantillas de Word. Cada Release publica el manifiesto completo, aunque solo
-/// cambie uno de los dos; el otro repite la versión vigente. Así la aplicación
-/// resuelve ambas comprobaciones con una única petición y no puede quedarse con
-/// información desparejada.
+/// El manifiesto describe el instalador y, opcionalmente, el paquete de
+/// plantillas. La firma CMS separada autentica ambos metadatos; cada archivo
+/// descargado se valida además por tamaño y SHA-256.
 /// </remarks>
 public sealed class ManifiestoActualizacion
 {
@@ -108,9 +106,33 @@ public sealed class PaqueteActualizacion
     /// reconocible, dirección de confianza y hash con la longitud correcta.
     /// </summary>
     public bool EsValido(out VersionSemantica version)
-        => VersionSemantica.TryParse(Version, out version)
-           && Sha256.Trim().Length == 64
-           && EsDescargaPermitida(Url);
+    {
+        if (!VersionSemantica.TryParse(Version, out version) ||
+            Tamano <= 0 || Tamano > ConfiguracionActualizaciones.TamanoMaximoInstalador ||
+            Sha256.Trim().Length != 64 ||
+            !EsUrlPublicacionOficial(Url) ||
+            !DateTime.TryParseExact(
+                Fecha, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out _) ||
+            Archivos.Count > 100 || Notas.Count > 50 ||
+            Archivos.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 160) ||
+            Notas.Any(x => x.Length > 500))
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = Convert.FromHexString(Sha256.Trim());
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        return string.IsNullOrWhiteSpace(VersionMinima) ||
+               VersionSemantica.TryParse(VersionMinima, out _);
+    }
 
     /// <summary>Acepta solo HTTPS y solo dominios de GitHub.</summary>
     public static bool EsDescargaPermitida(string url)
@@ -132,4 +154,15 @@ public sealed class PaqueteActualizacion
 
         return false;
     }
+
+    /// <summary>
+    /// La dirección declarada en el manifiesto debe pertenecer a una Release
+    /// del repositorio oficial. Las redirecciones posteriores se validan por
+    /// separado contra <see cref="ConfiguracionActualizaciones.DominiosPermitidos"/>.
+    /// </summary>
+    private static bool EsUrlPublicacionOficial(string url)
+        => EsDescargaPermitida(url) &&
+           url.StartsWith(
+               ConfiguracionActualizaciones.UrlRepositorio + "/releases/download/",
+               StringComparison.OrdinalIgnoreCase);
 }

@@ -1,11 +1,4 @@
-# ════════════════════════════════════════════════════════════════════════════
-#  Publicación de una versión SOLO de plantillas
-#
-#  Se dispara al crear una etiqueta con formato  plantillas-2.3.2
-#  Genera un paquete .zip con los .docx y un update.json que repite la versión
-#  del programa vigente, de modo que los equipos solo ven la actualización de
-#  plantillas y no vuelven a descargar el instalador completo.
-# ════════════════════════════════════════════════════════════════════════════
+# Publicación firmada de plantillas sin recompilar la aplicación.
 name: Publicar plantillas
 
 on:
@@ -21,15 +14,19 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: publicar-plantillas-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publicar:
     runs-on: windows-latest
-
+    environment: produccion
     steps:
       - name: Descargar el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Preparar los datos de la versión
+      - name: Determinar y validar versiones
         id: datos
         shell: pwsh
         run: |
@@ -38,89 +35,153 @@ jobs:
           } else {
             '${{ github.event.inputs.etiqueta }}'
           }
+          if ($etiqueta -notmatch '^plantillas-\d+\.\d+\.\d+$') {
+            throw "Etiqueta inválida: $etiqueta"
+          }
           $plantVer = $etiqueta -replace '^plantillas-', ''
-
-          # version.txt del repositorio manda: debe coincidir con la etiqueta.
           $declarada = (Get-Content 'plantillas/version.txt' -Raw).Trim()
           if ($declarada -ne $plantVer) {
-            Write-Error "plantillas/version.txt dice $declarada pero la etiqueta es $plantVer. Igualelos antes de publicar."
-            exit 1
+            throw "plantillas/version.txt declara $declarada y la etiqueta $plantVer."
           }
-
-          # Version del programa vigente, que el manifiesto debe repetir.
           $csproj = 'src/GeneradorAnexos.WinUI/GeneradorAnexos.WinUI.csproj'
           $appVer = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version |
-                     Where-Object { $_ } | Select-Object -First 1
-
+            Where-Object { $_ } | Select-Object -First 1
           "etiqueta=$etiqueta" >> $env:GITHUB_OUTPUT
           "plantillas=$plantVer" >> $env:GITHUB_OUTPUT
           "app=$appVer" >> $env:GITHUB_OUTPUT
 
-      - name: Localizar el instalador de la versión vigente del programa
-        id: app
+      - name: Preparar y validar el certificado institucional
+        id: firma
+        shell: pwsh
+        env:
+          CERTIFICADO_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          CERTIFICADO_CLAVE: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERTIFICADO_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:CERTIFICADO_CLAVE)) {
+            throw 'Faltan los secretos de firma. No se permite publicar sin certificado.'
+          }
+          New-Item -ItemType Directory -Force .signing | Out-Null
+          $pfx = (Resolve-Path .signing).Path + '\code-signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERTIFICADO_BASE64))
+          $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $pfx, $env:CERTIFICADO_CLAVE,
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
+          $ahora = (Get-Date).ToUniversalTime()
+          $firmaCodigo = @($cert.Extensions |
+            Where-Object { $_.Oid.Value -eq '2.5.29.37' } |
+            ForEach-Object { $_.EnhancedKeyUsages } |
+            Where-Object { $_.Value -eq '1.3.6.1.5.5.7.3.3' })
+          if (-not $cert.HasPrivateKey -or
+              $cert.NotBefore.ToUniversalTime() -gt $ahora -or
+              $cert.NotAfter.ToUniversalTime() -le $ahora -or
+              $firmaCodigo.Count -eq 0) {
+            throw 'El certificado no es válido para firma de código en la fecha actual.'
+          }
+          $hash = $cert.GetCertHashString([Security.Cryptography.HashAlgorithmName]::SHA256)
+          $config = Get-Content 'src/GeneradorAnexos.WinUI/Services/Actualizaciones/ConfiguracionActualizaciones.cs' -Raw
+          if ($config -notmatch [regex]::Escape($hash)) {
+            throw "La huella SHA-256 $hash no está fijada en ConfiguracionActualizaciones.cs."
+          }
+          "pfx=$pfx" >> $env:GITHUB_OUTPUT
+          "hash=$hash" >> $env:GITHUB_OUTPUT
+
+      - name: Validar el contenido de las plantillas
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression
+          foreach ($nombre in @('plantilla_anexos.docx', 'plantilla_tdr.docx')) {
+            $ruta = Join-Path plantillas $nombre
+            if (-not (Test-Path $ruta) -or (Get-Item $ruta).Length -gt 15MB) {
+              throw "Falta $nombre o supera 15 MB."
+            }
+            $zip = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $ruta))
+            try {
+              $nombres = @($zip.Entries | ForEach-Object { $_.FullName.ToLowerInvariant() })
+              if ($nombres -notcontains '[content_types].xml' -or
+                  $nombres -notcontains 'word/document.xml' -or
+                  $nombres -match 'vbaproject\.bin|activex/|embeddings/') {
+                throw "$nombre no es una plantilla DOCX segura y válida."
+              }
+            } finally { $zip.Dispose() }
+          }
+          Get-Content plantillas\catalogos.json -Raw | ConvertFrom-Json | Out-Null
+
+      - name: Recuperar y verificar el canal vigente de la aplicación
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # El manifiesto debe seguir apuntando a un instalador que exista, para
-          # que un equipo con una version muy antigua pueda seguir actualizando.
-          $appVer = '${{ steps.datos.outputs.app }}'
-          $json = gh release view "v$appVer" --repo ${{ github.repository }} --json assets 2>$null
-          if (-not $json) {
-            Write-Error "No existe la Release v$appVer. Publique primero el programa."
-            exit 1
+          New-Item -ItemType Directory -Force anterior | Out-Null
+          $tag = 'v${{ steps.datos.outputs.app }}'
+          gh release download $tag --repo ${{ github.repository }} `
+            --pattern 'update.json*' --dir anterior
+          if (-not (Test-Path anterior\update.json) -or
+              -not (Test-Path anterior\update.json.p7s)) {
+            throw "La Release $tag no contiene el manifiesto firmado."
           }
-          $assets = ($json | ConvertFrom-Json).assets
-          $setup = $assets | Where-Object { $_.name -like '*.exe' } | Select-Object -First 1
-          $manif = $assets | Where-Object { $_.name -eq 'update.json' } | Select-Object -First 1
-          if (-not $setup -or -not $manif) {
-            Write-Error "La Release v$appVer no tiene instalador o update.json."
-            exit 1
+          Add-Type -AssemblyName System.Security.Cryptography.Pkcs
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path anterior\update.json))
+          $cms = [Security.Cryptography.Pkcs.SignedCms]::new(
+            [Security.Cryptography.Pkcs.ContentInfo]::new($bytes), $true)
+          $cms.Decode([IO.File]::ReadAllBytes((Resolve-Path anterior\update.json.p7s)))
+          $cms.CheckSignature($true)
+          if ($cms.SignerInfos.Count -ne 1) { throw 'Firma anterior ambigua.' }
+          $hash = $cms.SignerInfos[0].Certificate.GetCertHashString(
+            [Security.Cryptography.HashAlgorithmName]::SHA256)
+          if ($hash -ne '${{ steps.firma.outputs.hash }}') {
+            throw 'El manifiesto anterior no fue firmado por el certificado institucional actual.'
           }
-          gh release download "v$appVer" --repo ${{ github.repository }} --pattern 'update.json' --dir anterior
-          "setup=$($setup.name)" >> $env:GITHUB_OUTPUT
 
-      - name: Empaquetar plantillas y escribir update.json
+      - name: Empaquetar y escribir el nuevo manifiesto
         shell: pwsh
         run: |
-          $etiqueta = '${{ steps.datos.outputs.etiqueta }}'
+          Remove-Item salida -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory salida | Out-Null
           $plantVer = '${{ steps.datos.outputs.plantillas }}'
-          $appVer   = '${{ steps.datos.outputs.app }}'
-          $base     = "https://github.com/${{ github.repository }}/releases/download/$etiqueta"
-
-          New-Item -ItemType Directory -Force -Path salida | Out-Null
-          $zipPath = "salida\plantillas-$plantVer.zip"
-          Compress-Archive -Path plantillas\* -DestinationPath $zipPath -Force
-          $zip = Get-Item $zipPath
-
-          # El canal del programa se copia tal cual del manifiesto anterior:
-          # no cambia nada del instalador, solo las plantillas.
-          $anterior = Get-Content 'anterior/update.json' -Raw | ConvertFrom-Json
-
+          $etiqueta = '${{ steps.datos.outputs.etiqueta }}'
+          Compress-Archive -Path plantillas\* -DestinationPath "salida\plantillas-$plantVer.zip"
+          $zip = Get-Item "salida\plantillas-$plantVer.zip"
+          if ($zip.Length -gt 25MB) { throw 'El paquete de plantillas supera 25 MB.' }
+          $anterior = Get-Content anterior\update.json -Raw | ConvertFrom-Json
+          $base = "https://github.com/${{ github.repository }}/releases/download/$etiqueta"
           $manifiesto = [ordered]@{
-            manifiesto = 1
-            publicado  = (Get-Date).ToUniversalTime().ToString('o')
-            release    = $etiqueta
-            app        = $anterior.app
+            manifiesto = 1; publicado = (Get-Date).ToUniversalTime().ToString('o'); release = $etiqueta
+            app = $anterior.app
             plantillas = [ordered]@{
-              version  = $plantVer
-              fecha    = (Get-Date).ToString('yyyy-MM-dd')
-              url      = "$base/$($zip.Name)"
-              sha256   = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash
-              tamano   = $zip.Length
-              archivos = @('plantilla_anexos.docx', 'plantilla_tdr.docx')
-              notas    = @()
+              version = $plantVer; fecha = (Get-Date).ToString('yyyy-MM-dd')
+              url = "$base/$($zip.Name)"; sha256 = (Get-FileHash $zip -Algorithm SHA256).Hash
+              tamano = $zip.Length; archivos = @('plantilla_anexos.docx', 'plantilla_tdr.docx'); notas = @()
             }
           }
+          $manifiesto | ConvertTo-Json -Depth 6 | Set-Content salida\update.json -Encoding utf8
 
-          $manifiesto | ConvertTo-Json -Depth 6 |
-            Set-Content 'salida\update.json' -Encoding utf8
-          "$((Get-FileHash $zip.FullName -Algorithm SHA256).Hash)  $($zip.Name)" |
-            Set-Content 'salida\SHA256SUMS.txt' -Encoding ascii
-          Get-Content 'salida\update.json'
+      - name: Firmar y verificar el manifiesto
+        shell: pwsh
+        env:
+          CERTIFICADO_CLAVE: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          Add-Type -AssemblyName System.Security.Cryptography.Pkcs
+          $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            '${{ steps.firma.outputs.pfx }}', $env:CERTIFICADO_CLAVE,
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path salida\update.json))
+          $cms = [Security.Cryptography.Pkcs.SignedCms]::new(
+            [Security.Cryptography.Pkcs.ContentInfo]::new($bytes), $true)
+          $signer = [Security.Cryptography.Pkcs.CmsSigner]::new($cert)
+          $signer.IncludeOption = [Security.Cryptography.X509Certificates.X509IncludeOption]::EndCertOnly
+          $cms.ComputeSignature($signer, $false)
+          [IO.File]::WriteAllBytes((Join-Path (Resolve-Path salida) 'update.json.p7s'), $cms.Encode())
+          $prueba = [Security.Cryptography.Pkcs.SignedCms]::new(
+            [Security.Cryptography.Pkcs.ContentInfo]::new($bytes), $true)
+          $prueba.Decode([IO.File]::ReadAllBytes((Resolve-Path salida\update.json.p7s)))
+          $prueba.CheckSignature($true)
+          Get-ChildItem salida -File | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash)  $($_.Name)"
+          } | Set-Content salida\SHA256SUMS.txt -Encoding ascii
 
-      - name: Crear la Release de plantillas
-        uses: softprops/action-gh-release@v2
+      - name: Crear la Release en borrador
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
         with:
           tag_name: ${{ steps.datos.outputs.etiqueta }}
           name: Plantillas ${{ steps.datos.outputs.plantillas }}
@@ -128,4 +189,10 @@ jobs:
           files: |
             salida/plantillas-*.zip
             salida/update.json
+            salida/update.json.p7s
             salida/SHA256SUMS.txt
+
+      - name: Eliminar el certificado temporal
+        if: always()
+        shell: pwsh
+        run: Remove-Item .signing -Recurse -Force -ErrorAction SilentlyContinue

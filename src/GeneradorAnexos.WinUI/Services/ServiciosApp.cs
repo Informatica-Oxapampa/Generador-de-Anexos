@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using GeneradorAnexos.Application.Abstractions.Documents;
 using GeneradorAnexos.Application.Abstractions.Drafts;
 using GeneradorAnexos.Application.Abstractions.Integrations;
 using GeneradorAnexos.Application.Abstractions.Persistence;
+using GeneradorAnexos.Application.Abstractions.Security;
 using GeneradorAnexos.Domain.Models;
 using GeneradorAnexos.Domain.Payments;
 using GeneradorAnexos.Domain.Serialization;
@@ -29,8 +29,10 @@ namespace GeneradorAnexos.WinUI.Services;
 /// </remarks>
 public static class ServiciosApp
 {
+    private static readonly ISecurityEventSink EventosSeguridad = new AllowlistedTraceSecurityEventSink();
+
     private static readonly Lazy<DpapiDataProtectionService> Proteccion = new(
-        () => new DpapiDataProtectionService(NullSecurityEventSink.Instance));
+        () => new DpapiDataProtectionService(EventosSeguridad));
 
     private static readonly Lazy<IBackupService> Almacen = new(
         () => new BackupService());
@@ -42,7 +44,7 @@ public static class ServiciosApp
         () => new EncryptedDraftStore(
             WindowsDraftPathProvider.CreateForCurrentUser(),
             Proteccion.Value,
-            NullSecurityEventSink.Instance));
+            EventosSeguridad));
 
 
     /// <summary>Registros guardados (SQLite cifrado en reposo).</summary>
@@ -152,9 +154,15 @@ public sealed class FachadaBorradores
 
         try
         {
-            return new ResultadoBorrador(PayloadJson.Deserialize(resultado.Json));
+            var payload = PayloadJson.Deserialize(resultado.Json);
+            if (resultado.WasLegacyPlaintext)
+            {
+                await _almacen.Value.SaveAsync(PayloadJson.Serialize(payload), ct);
+            }
+
+            return new ResultadoBorrador(payload, resultado.WasLegacyPlaintext);
         }
-        catch (JsonException excepcion)
+        catch (PayloadJsonException excepcion)
         {
             Registro.Error("AUTOSAVE_PARSE_FAILED", excepcion);
             return null;
@@ -165,4 +173,4 @@ public sealed class FachadaBorradores
 }
 
 /// <summary>Borrador recuperado del autoguardado.</summary>
-public sealed record ResultadoBorrador(BorradorPayloadV1? Payload);
+public sealed record ResultadoBorrador(BorradorPayloadV1? Payload, bool FueMigradoDesdeTextoPlano);

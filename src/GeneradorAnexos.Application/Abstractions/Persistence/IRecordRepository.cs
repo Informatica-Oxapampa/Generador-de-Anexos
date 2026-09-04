@@ -6,7 +6,10 @@ public sealed record SavedRecordSummary(
     long Id,
     string Name,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    bool HasTdr,
+    bool HasAnnex,
+    bool IsCorrupted = false);
 
 public sealed record SavedRecord(
     long Id,

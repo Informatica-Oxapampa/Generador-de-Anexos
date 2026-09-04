@@ -1,5 +1,4 @@
-# Comprobaciones en cada push y pull request.
-# No publica nada: solo restaura, compila las capas portables y corre pruebas.
+# Comprobaciones en cada push y pull request. No publica artefactos.
 name: CI
 
 on:
@@ -8,20 +7,55 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
 jobs:
-  dominio-y-lector:
+  pruebas-portables:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Preparar .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v4.3.1
         with:
           dotnet-version: '8.0.x'
 
-      - name: Pruebas de dominio, pagos y sincronización
-        run: dotnet run --project tests/GeneradorAnexos.Domain.Tests/GeneradorAnexos.Domain.Tests.csproj -c Release
+      - name: Restaurar pruebas
+        run: |
+          dotnet restore tests/GeneradorAnexos.Domain.Tests/GeneradorAnexos.Domain.Tests.csproj
+          dotnet restore tests/OrderPdfReader.Regression/OrderPdfReader.Regression.csproj
 
-      - name: Regresión del lector PDF (sintéticos)
-        run: dotnet run --project tests/OrderPdfReader.Regression/OrderPdfReader.Regression.csproj -c Release
+      - name: Pruebas de dominio, pagos y sincronización
+        run: dotnet run --project tests/GeneradorAnexos.Domain.Tests/GeneradorAnexos.Domain.Tests.csproj -c Release --no-restore
+
+      - name: Regresión del lector PDF
+        run: dotnet run --project tests/OrderPdfReader.Regression/OrderPdfReader.Regression.csproj -c Release --no-restore
+
+  compilacion-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Preparar .NET
+        uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v4.3.1
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restaurar y compilar la aplicación completa
+        shell: pwsh
+        run: |
+          dotnet restore GeneradorAnexos.WinUI.sln
+          dotnet build src/GeneradorAnexos.WinUI/GeneradorAnexos.WinUI.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:Platform=x64 --no-restore

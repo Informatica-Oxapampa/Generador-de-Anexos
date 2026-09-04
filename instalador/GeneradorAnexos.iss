@@ -12,7 +12,7 @@
 ; ============================================================================
 
 #define MiNombre        "Generador de Anexos"
-#define MiVersion       "1.0.1"
+#define MiVersion       "1.0.3"
 #define MiPublicador    "Municipalidad Provincial de Oxapampa - Oficina de Tecnologia de la Informacion"
 #define MiUrl           "https://www.munioxapampa.gob.pe"
 #define MiEjecutable    "GeneradorAnexos.exe"
@@ -28,7 +28,7 @@
 ;     Evita publicar un Setup que anuncia una version distinta de la que
 ;     realmente instala, que romperia la comparacion del actualizador.
 #define VersionEjecutable GetFileVersion(AddBackslash(SourcePath) + MiCarpetaOrigen + "\" + MiEjecutable)
-#if Pos(MiVersion, VersionEjecutable) != 1
+#if VersionEjecutable != MiVersion + ".0"
   #error La version definida en MiVersion no coincide con la del ejecutable publicado. Actualice <Version> en el csproj o MiVersion en este script.
 #endif
 
@@ -55,13 +55,13 @@ AppPublisherURL={#MiUrl}
 AppSupportURL={#MiUrl}
 AppUpdatesURL={#MiUrl}
 
-; Carpeta propuesta; el asistente permite cambiarla.
+; Carpeta exclusiva y fija: evita mezclar la aplicación con archivos ajenos.
 ; Con PrivilegesRequired=admin, {autopf} resuelve a C:\Program Files.
 DefaultDirName={autopf}\Generador de Anexos
 DefaultGroupName={#MiNombre}
 AllowNoIcons=yes
 DisableProgramGroupPage=auto
-DisableDirPage=no
+DisableDirPage=yes
 DisableWelcomePage=no
 
 ; Entrada en Configuracion > Aplicaciones (y en Panel de control).
@@ -111,14 +111,13 @@ PrivilegesRequired=admin
 ; la instalacion como la desinstalacion detectan que esta en uso y evitan
 ; dejar archivos bloqueados -y por tanto carpetas huerfanas- en el equipo.
 CloseApplications=yes
-CloseApplicationsFilter=*.exe,*.dll,*.docx
+CloseApplicationsFilter={#MiEjecutable}
 RestartApplications=no
 AppMutex=GeneradorAnexos.MPO.OTI
 
-; No advertir si la carpeta de destino ya existe: el programa siempre se
-; instala en una carpeta propia, y esa advertencia solo confundia al usuario
-; cuando quedaban restos de una version anterior.
-DirExistsWarning=no
+; Advertir si la carpeta fija ya existe para hacer visibles restos o archivos
+; inesperados antes de continuar.
+DirExistsWarning=yes
 
 ; Texto informativo que ve el usuario antes de instalar.
 ; Se usa la version con formato (RTF). Si prefiere texto plano, cambie la
@@ -144,15 +143,6 @@ Source: "{#MiCarpetaOrigen}\*"; DestDir: "{app}"; \
 #ifdef IncluyeVcRedist
 Source: "{#VcRedistArchivo}"; DestDir: "{tmp}"; Flags: deleteafterinstall
 #endif
-
-[UninstallDelete]
-; Elimina cualquier resto que haya quedado en la carpeta del programa: archivos
-; que el usuario haya copiado dentro, ficheros bloqueados en un intento previo o
-; subcarpetas vacias. Sin esto, la carpeta podia sobrevivir a la desinstalacion
-; y la siguiente instalacion la encontraba ocupada.
-; La comprobacion evita borrar de mas si alguien eligio como destino una carpeta
-; compartida del sistema en lugar de una carpeta propia del programa.
-Type: filesandordirs; Name: "{app}"; Check: CarpetaSeguraParaBorrar
 
 [Icons]
 Name: "{autoprograms}\{#MiNombre}"; Filename: "{app}\{#MiEjecutable}"; \
@@ -198,9 +188,6 @@ begin
        'Installed', Instalado) then
     Result := Instalado = 1;
 
-  { Respaldo: si la biblioteca ya esta en el sistema, se da por valido. }
-  if not Result then
-    Result := FileExists(ExpandConstant('{sys}\vcruntime140_1.dll'));
 end;
 
 function FaltaVcRedist: Boolean;
@@ -215,23 +202,19 @@ begin
 #ifndef IncluyeVcRedist
   if not VcRedistInstalado then
   begin
-    Result := MsgBox(
+    MsgBox(
       'Este equipo no tiene instalado el paquete redistribuible de' + #13#10 +
       'Microsoft Visual C++ 2015-2022 (x64), que el programa necesita' + #13#10 +
-      'para ejecutarse.' + #13#10 + #13#10 +
-      'Puede continuar con la instalacion, pero si el programa no abre,' + #13#10 +
-      'instale primero ese paquete desde el sitio de Microsoft.' + #13#10 + #13#10 +
-      'Desea continuar de todos modos?',
-      mbConfirmation, MB_YESNO) = IDYES;
+      'para ejecutarse. La instalacion se cancelara para evitar dejar' + #13#10 +
+      'un programa que no pueda iniciar.' + #13#10 + #13#10 +
+      'Instale el componente oficial de Microsoft o coloque' + #13#10 +
+      'VC_redist.x64.exe en instalador\redist y vuelva a generar el Setup.',
+      mbError, MB_OK);
+    Result := False;
   end;
 #endif
 end;
 
-{ ------------------------------------------------------------------------
-  Salvaguarda del borrado de la carpeta de instalacion: nunca se vacia una
-  raiz de unidad ni una carpeta compartida del sistema, solo una carpeta
-  propia del programa.
-  ------------------------------------------------------------------------ }
 { Cierto cuando el instalador se ejecuta sin interfaz, que es como lo lanza el
   actualizador automatico de la propia aplicacion. }
 function InstalacionSilenciosa: Boolean;
@@ -239,41 +222,6 @@ begin
   Result := WizardSilent;
 end;
 
-function CarpetaSeguraParaBorrar: Boolean;
-var
-  Ruta: String;
-begin
-  Ruta := RemoveBackslash(ExpandConstant('{app}'));
-
-  Result := (Length(Ruta) > 3)
-    and (CompareText(Ruta, RemoveBackslash(ExpandConstant('{autopf}'))) <> 0)
-    and (CompareText(Ruta, RemoveBackslash(ExpandConstant('{autopf32}'))) <> 0)
-    and (CompareText(Ruta, RemoveBackslash(ExpandConstant('{localappdata}'))) <> 0)
-    and (CompareText(Ruta, RemoveBackslash(ExpandConstant('{userappdata}'))) <> 0)
-    and (CompareText(Ruta, RemoveBackslash(ExpandConstant('{userdocs}'))) <> 0)
-    and (CompareText(Ruta, RemoveBackslash(ExpandConstant('{userdesktop}'))) <> 0)
-    and (CompareText(Ruta, RemoveBackslash(ExpandConstant('{win}'))) <> 0)
-    and (CompareText(Ruta, RemoveBackslash(ExpandConstant('{sys}'))) <> 0);
-end;
-
-{ Al desinstalar, se ofrece conservar o borrar los datos del usuario
-  (registros guardados, respaldos y preferencias). Por defecto se conservan. }
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  CarpetaDatos: String;
-begin
-  if CurUninstallStep = usPostUninstall then
-  begin
-    CarpetaDatos := ExpandConstant('{localappdata}\GeneradorAnexos');
-    if DirExists(CarpetaDatos) then
-    begin
-      if MsgBox(
-           'Desea eliminar tambien los registros guardados, los respaldos' + #13#10 +
-           'y las preferencias de este usuario?' + #13#10 + #13#10 +
-           'Si elige No, los datos se conservan por si vuelve a instalar' + #13#10 +
-           'el programa.',
-           mbConfirmation, MB_YESNO) = IDYES then
-        DelTree(CarpetaDatos, True, True, True);
-    end;
-  end;
-end;
+{ Los datos del usuario nunca se borran desde el desinstalador elevado. Esto
+  evita eliminar el perfil equivocado. Se gestionan desde Configuracion con la
+  aplicación abierta bajo la cuenta propietaria. }

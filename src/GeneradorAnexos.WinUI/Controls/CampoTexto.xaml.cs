@@ -31,6 +31,7 @@ public sealed partial class CampoTexto : UserControl, ICampo
     public CampoTexto()
     {
         InitializeComponent();
+        Entrada.MaxLength = 500;
         Loaded += (_, _) => RefrescarEtiqueta();
     }
 
@@ -207,7 +208,11 @@ public sealed partial class CampoTexto : UserControl, ICampo
     // ──────────────────────────── Internos ────────────────────────────
 
     private void RefrescarEtiqueta()
-        => Etiqueta.Text = Obligatorio ? $"{Titulo}  *" : Titulo;
+    {
+        Etiqueta.Text = Obligatorio ? $"{Titulo}  *" : Titulo;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(Entrada, Titulo);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(Entrada, Ayuda);
+    }
 
     /// <summary>
     /// El icono acompana a la etiqueta. Al no ir superpuesto dentro del cuadro

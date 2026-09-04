@@ -94,7 +94,8 @@ public static class AsistenteActualizacion
         }
 
         var instalador = await DescargarAsync(
-            app, $"GeneradorAnexos-{version}-Setup.exe", "Actualizando aplicación", raiz);
+            app, $"GeneradorAnexos-{version}-Setup.exe", "Actualizando aplicación",
+            ConfiguracionActualizaciones.TamanoMaximoInstalador, raiz);
 
         if (instalador is null)
         {
@@ -113,12 +114,19 @@ public static class AsistenteActualizacion
             return;
         }
 
+        if (App.Ventana is not { } ventana ||
+            !await ventana.PrepararCierreSeguroAsync())
+        {
+            return;
+        }
+
         var resultado = await ServicioActualizaciones.InstalarAsync(
             instalador, app, CancellationToken.None);
 
         switch (resultado)
         {
             case ResultadoInstalacion.Lanzado:
+                await ventana.AutorizarCierrePorActualizacionAsync();
                 Microsoft.UI.Xaml.Application.Current.Exit();
                 return;
 
@@ -139,6 +147,13 @@ public static class AsistenteActualizacion
                     + "ha eliminado por seguridad." + Environment.NewLine + Environment.NewLine
                     + "No se instaló nada. Vuelva a intentarlo; si se repite, "
                     + "descargue la versión a mano desde la página oficial.");
+                return;
+
+            case ResultadoInstalacion.FirmaNoConfiable:
+                await ServicioDialogos.MostrarErrorAsync(
+                    "Firma del instalador no confiable",
+                    "El instalador no tiene una firma Authenticode válida del certificado " +
+                    "institucional autorizado. Se eliminó y no se ejecutó nada.");
                 return;
 
             default:
@@ -179,7 +194,8 @@ public static class AsistenteActualizacion
         }
 
         var descargado = await DescargarAsync(
-            paquete, $"plantillas-{version}.zip", "Actualizando plantillas", raiz);
+            paquete, $"plantillas-{version}.zip", "Actualizando plantillas",
+            ConfiguracionActualizaciones.TamanoMaximoPlantillas, raiz);
 
         if (descargado is null)
         {
@@ -214,6 +230,7 @@ public static class AsistenteActualizacion
         PaqueteActualizacion paquete,
         string nombreArchivo,
         string titulo,
+        long tamanoMaximo,
         XamlRoot raiz)
     {
         using var cancelacion = new CancellationTokenSource();
@@ -268,7 +285,7 @@ public static class AsistenteActualizacion
         try
         {
             archivo = await ServicioActualizaciones.DescargarVerificadoAsync(
-                paquete, nombreArchivo, progreso, cancelacion.Token);
+                paquete, nombreArchivo, tamanoMaximo, progreso, cancelacion.Token);
         }
         finally
         {

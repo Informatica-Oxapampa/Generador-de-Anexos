@@ -22,6 +22,12 @@ namespace GeneradorAnexos.WinUI.Services.Actualizaciones;
 /// </remarks>
 public static class ConfiguracionActualizaciones
 {
+    public const long TamanoMaximoManifiesto = 512 * 1024;
+    public const long TamanoMaximoFirmaManifiesto = 128 * 1024;
+    public const long TamanoMaximoInstalador = 700L * 1024 * 1024;
+    public const long TamanoMaximoPlantillas = 25L * 1024 * 1024;
+    public const int MaximoRedirecciones = 5;
+
     /// <summary>Organización propietaria del repositorio en GitHub.</summary>
     public const string Propietario = "Informatica-Oxapampa";
 
@@ -30,6 +36,9 @@ public static class ConfiguracionActualizaciones
 
     /// <summary>Nombre del manifiesto adjunto a cada versión publicada.</summary>
     public const string NombreManifiesto = "update.json";
+
+    /// <summary>Firma CMS separada del manifiesto.</summary>
+    public const string NombreFirmaManifiesto = "update.json.p7s";
 
     /// <summary>Versión del formato de manifiesto que entiende esta aplicación.</summary>
     public const int FormatoManifiesto = 1;
@@ -46,6 +55,9 @@ public static class ConfiguracionActualizaciones
     public static string UrlManifiesto
         => $"{UrlRepositorio}/releases/latest/download/{NombreManifiesto}";
 
+    public static string UrlFirmaManifiesto
+        => $"{UrlRepositorio}/releases/latest/download/{NombreFirmaManifiesto}";
+
     /// <summary>Listado de versiones publicadas, para «Ver notas de la versión».</summary>
     public static string UrlVersiones => $"{UrlRepositorio}/releases";
 
@@ -59,4 +71,42 @@ public static class ConfiguracionActualizaciones
         "objects.githubusercontent.com",
         "release-assets.githubusercontent.com",
     };
+
+    /// <summary>
+    /// Huellas SHA-256 de los certificados Authenticode autorizados para
+    /// publicar el instalador. Deben completarse con el certificado
+    /// institucional antes de habilitar una publicación automática.
+    /// Mantener la lista vacía hace que el actualizador falle de forma segura.
+    /// </summary>
+    public static readonly string[] FirmantesPermitidosSha256 = Array.Empty<string>();
+
+    public static bool FirmaInstitucionalConfigurada
+        => FirmantesPermitidosSha256.Length > 0 &&
+           FirmantesPermitidosSha256.All(EsHuellaSha256Valida);
+
+    private static bool EsHuellaSha256Valida(string? huella)
+    {
+        if (string.IsNullOrWhiteSpace(huella))
+        {
+            return false;
+        }
+
+        var normalizada = huella.Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace(":", string.Empty, StringComparison.Ordinal)
+            .Trim();
+        if (normalizada.Length != 64)
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = Convert.FromHexString(normalizada);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
 }

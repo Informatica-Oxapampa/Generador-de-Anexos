@@ -12,6 +12,7 @@ public sealed partial class CampoArea : UserControl, ICampo
     public CampoArea()
     {
         InitializeComponent();
+        Entrada.MaxLength = 8_000;
         Loaded += (_, _) => RefrescarEtiqueta();
     }
 
@@ -123,7 +124,11 @@ public sealed partial class CampoArea : UserControl, ICampo
     public void DestellarSincronizacion() => EfectoDestello.Aplicar(Entrada);
 
     private void RefrescarEtiqueta()
-        => Etiqueta.Text = Obligatorio ? $"{Titulo}  *" : Titulo;
+    {
+        Etiqueta.Text = Obligatorio ? $"{Titulo}  *" : Titulo;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(Entrada, Titulo);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(Entrada, Ayuda);
+    }
 
     private void AlCambiarTexto(object sender, TextChangedEventArgs e)
     {

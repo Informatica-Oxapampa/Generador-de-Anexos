@@ -14,6 +14,8 @@ namespace GeneradorAnexos.Infrastructure.Windows.Drafts;
 /// </summary>
 public sealed class EncryptedDraftStore : IDraftStore
 {
+    private const long MaximoArchivoProtegidoBytes = 4L * 1024 * 1024;
+
     private static readonly UTF8Encoding StrictUtf8 = new(
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
@@ -75,6 +77,10 @@ public sealed class EncryptedDraftStore : IDraftStore
             Directory.CreateDirectory(_autosaveDirectory);
             temporaryPath = CreateTemporaryPath();
             bytes = StrictUtf8.GetBytes(protectedEnvelope);
+            if (bytes.LongLength > MaximoArchivoProtegidoBytes)
+            {
+                throw new DraftStoreException(DraftStoreFailure.SaveFailed);
+            }
 
             await using (var stream = new FileStream(
                 temporaryPath,
@@ -131,6 +137,13 @@ public sealed class EncryptedDraftStore : IDraftStore
         string content;
         try
         {
+            var info = new FileInfo(_autosavePath);
+            if (info.Exists && (info.Length <= 0 || info.Length > MaximoArchivoProtegidoBytes))
+            {
+                _events.Write(SecurityEventId.DraftLoadFailed);
+                throw new DraftStoreException(DraftStoreFailure.LoadFailed);
+            }
+
             content = await File.ReadAllTextAsync(
                 _autosavePath,
                 StrictUtf8,

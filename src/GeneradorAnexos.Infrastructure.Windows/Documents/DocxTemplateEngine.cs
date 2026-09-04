@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using DocumentFormat.OpenXml.Wordprocessing;
 
 namespace GeneradorAnexos.Infrastructure.Windows.Documents;
@@ -31,15 +32,8 @@ public sealed class DocumentoException : Exception
 /// </remarks>
 public static class DocxTemplateEngine
 {
+    private const long TamanoMaximoPlantilla = 15L * 1024 * 1024;
     private static readonly Regex Marcador = new(@"\{\{\s*([A-Za-z0-9_]+)\s*\}\}", RegexOptions.Compiled);
-
-    /// <summary>
-    /// Marcadores de la plantilla que el contexto no cubrio en la ultima
-    /// generacion. Sirve para detectar plantillas y codigo desalineados.
-    /// </summary>
-    public static IReadOnlyCollection<string> UltimosNoResueltos => NoResueltos;
-
-    private static readonly HashSet<string> NoResueltos = new(StringComparer.Ordinal);
 
     /// <summary>Copia la plantilla al destino y aplica el contexto.</summary>
     /// <exception cref="DocumentoException">Si la plantilla falta o no se puede escribir.</exception>
@@ -56,7 +50,12 @@ public static class DocxTemplateEngine
                 "Reinstale la aplicación o restaure las plantillas.");
         }
 
-        NoResueltos.Clear();
+        if (new FileInfo(rutaPlantilla).Length > TamanoMaximoPlantilla)
+        {
+            throw new DocumentoException("La plantilla supera el límite permitido de 15 MB.");
+        }
+
+        var noResueltos = new HashSet<string>(StringComparer.Ordinal);
 
         var carpeta = Path.GetDirectoryName(rutaDestino);
         if (!string.IsNullOrEmpty(carpeta))
@@ -70,7 +69,7 @@ public static class DocxTemplateEngine
         // quedaba con un documento corrupto y, si estaba sobrescribiendo uno
         // anterior que sí era válido, lo perdía. Con el temporal, un fallo deja
         // intacto lo que ya había.
-        var temporal = rutaDestino + ".generando";
+        var temporal = rutaDestino + ".generando-" + Guid.NewGuid().ToString("N") + ".tmp";
 
         try
         {
@@ -82,7 +81,7 @@ public static class DocxTemplateEngine
                 var cuerpo = documento.MainDocumentPart?.Document?.Body
                     ?? throw new DocumentoException("La plantilla no tiene un cuerpo de documento válido.");
 
-                SustituirEnParte(cuerpo, contexto);
+                SustituirEnParte(cuerpo, contexto, noResueltos);
 
                 // Encabezados y pies también pueden contener marcadores.
                 var parte = documento.MainDocumentPart!;
@@ -91,7 +90,7 @@ public static class DocxTemplateEngine
                 {
                     if (encabezado.Header is { } cabecera)
                     {
-                        SustituirEnParte(cabecera, contexto);
+                        SustituirEnParte(cabecera, contexto, noResueltos);
                     }
                 }
 
@@ -99,13 +98,27 @@ public static class DocxTemplateEngine
                 {
                     if (pie.Footer is { } piePagina)
                     {
-                        SustituirEnParte(piePagina, contexto);
+                        SustituirEnParte(piePagina, contexto, noResueltos);
                     }
                 }
 
                 postProceso?.Invoke(documento);
 
+                if (noResueltos.Count > 0)
+                {
+                    throw new DocumentoException(
+                        "La plantilla contiene campos sin correspondencia: " +
+                        string.Join(", ", noResueltos.OrderBy(x => x)) + ".");
+                }
+
                 parte.Document.Save();
+
+                if (new OpenXmlValidator(FileFormatVersions.Office2019)
+                    .Validate(documento).Take(1).Any())
+                {
+                    throw new DocumentoException(
+                        "El documento generado no superó la validación estructural OpenXML.");
+                }
             }
 
             // Reemplazo en una sola operación: o queda el documento anterior o
@@ -163,11 +176,14 @@ public static class DocxTemplateEngine
         }
     }
 
-    private static void SustituirEnParte(OpenXmlElement raiz, IReadOnlyDictionary<string, string> contexto)
+    private static void SustituirEnParte(
+        OpenXmlElement raiz,
+        IReadOnlyDictionary<string, string> contexto,
+        ISet<string> noResueltos)
     {
         foreach (var parrafo in raiz.Descendants<Paragraph>().ToList())
         {
-            SustituirEnParrafo(parrafo, contexto);
+            SustituirEnParrafo(parrafo, contexto, noResueltos);
         }
     }
 
@@ -184,7 +200,10 @@ public static class DocxTemplateEngine
     /// a veces por revisiones o corrector ortográfico— se recurre a reconstruir
     /// el párrafo completo, que es una operación más destructiva.
     /// </remarks>
-    internal static void SustituirEnParrafo(Paragraph parrafo, IReadOnlyDictionary<string, string> contexto)
+    internal static void SustituirEnParrafo(
+        Paragraph parrafo,
+        IReadOnlyDictionary<string, string> contexto,
+        ISet<string> noResueltos)
     {
         var runs = parrafo.Elements<Run>().ToList();
         if (runs.Count == 0)
@@ -199,12 +218,14 @@ public static class DocxTemplateEngine
             return;
         }
 
-        if (SustituirRunARun(runs, textos, contexto))
+        if (SustituirRunARun(runs, textos, contexto, noResueltos))
         {
             return;
         }
 
-        var sustituido = Marcador.Replace(original, coincidencia => Resolver(coincidencia, contexto));
+        var sustituido = Marcador.Replace(
+            original,
+            coincidencia => Resolver(coincidencia, contexto, noResueltos));
 
         if (sustituido == original)
         {
@@ -225,7 +246,8 @@ public static class DocxTemplateEngine
     /// </summary>
     private static string Resolver(
         System.Text.RegularExpressions.Match coincidencia,
-        IReadOnlyDictionary<string, string> contexto)
+        IReadOnlyDictionary<string, string> contexto,
+        ISet<string> noResueltos)
     {
         var clave = coincidencia.Groups[1].Value;
         if (contexto.TryGetValue(clave, out var valor))
@@ -233,7 +255,7 @@ public static class DocxTemplateEngine
             return valor ?? string.Empty;
         }
 
-        NoResueltos.Add(clave);
+        noResueltos.Add(clave);
         return string.Empty;
     }
 
@@ -248,7 +270,8 @@ public static class DocxTemplateEngine
     private static bool SustituirRunARun(
         List<Run> runs,
         List<string> textos,
-        IReadOnlyDictionary<string, string> contexto)
+        IReadOnlyDictionary<string, string> contexto,
+        ISet<string> noResueltos)
     {
         var completos = Marcador.Matches(string.Concat(textos)).Count;
         var porRun = textos.Sum(texto => Marcador.Matches(texto).Count);
@@ -267,7 +290,9 @@ public static class DocxTemplateEngine
                 continue;
             }
 
-            var sustituido = Marcador.Replace(textos[i], c => Resolver(c, contexto));
+            var sustituido = Marcador.Replace(
+                textos[i],
+                c => Resolver(c, contexto, noResueltos));
             if (sustituido != textos[i])
             {
                 ReescribirRun(runs[i], sustituido);
@@ -422,7 +447,8 @@ public static class DocxTemplateEngine
 
         if (parrafo is null)
         {
-            return;
+            throw new DocumentoException(
+                $"La plantilla no contiene la sección requerida {token}.");
         }
 
         if (elementos.Count == 0)

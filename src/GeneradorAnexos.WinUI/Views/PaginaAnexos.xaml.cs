@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using GeneradorAnexos.Domain.Formatting;
 using GeneradorAnexos.Domain.Models;
@@ -23,6 +24,7 @@ public sealed partial class PaginaAnexos : UserControl
 {
     private readonly PreferenciasUi _preferencias = new();
     private readonly GestorVistasPrevias _vistasPrevias = new("anexo");
+    private static readonly SemaphoreSlim SemaforoGeneracion = new(1, 1);
 
     private VentanaPrincipal? _ventana;
     private GaSync.EstadoCompartido? _estado;
@@ -391,6 +393,23 @@ public sealed partial class PaginaAnexos : UserControl
     /// <summary>Equivalente de <c>_generar</c>.</summary>
     public async Task GenerarAsync()
     {
+        if (!await SemaforoGeneracion.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            await GenerarCoreAsync();
+        }
+        finally
+        {
+            SemaforoGeneracion.Release();
+        }
+    }
+
+    private async Task GenerarCoreAsync()
+    {
         if (!ValidarTodo())
         {
             EnfocarPrimerInvalido();
@@ -450,6 +469,23 @@ public sealed partial class PaginaAnexos : UserControl
 
     /// <summary>Equivalente de <c>_vista_previa_anexos</c>.</summary>
     public async Task VistaPreviaAsync()
+    {
+        if (!await SemaforoGeneracion.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            await VistaPreviaCoreAsync();
+        }
+        finally
+        {
+            SemaforoGeneracion.Release();
+        }
+    }
+
+    private async Task VistaPreviaCoreAsync()
     {
         // La vista previa admite un formulario parcial. Solo Generar aplica la
         // validación obligatoria y el plan estricto.

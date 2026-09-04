@@ -1,112 +1,174 @@
+using System.Globalization;
 using GeneradorAnexos.Application.Abstractions.Persistence;
+using Microsoft.Data.Sqlite;
 
 namespace GeneradorAnexos.Infrastructure.Windows.Persistence;
 
 /// <summary>
-/// Equivalente de <c>core/almacen.py: respaldar / info_respaldos</c>.
+/// Crea respaldos transaccionalmente consistentes mediante la API de backup de SQLite.
 /// </summary>
-/// <remarks>
-/// Copia consistente de la base tras cada cambio, con rotación de los archivos
-/// más antiguos y un espejo. Es best-effort: un fallo del respaldo nunca
-/// interrumpe la operación del usuario, igual que en el original.
-/// </remarks>
 public sealed class BackupService : IBackupService
 {
     private const int MaximoRespaldos = 10;
+    // Servicio único durante toda la ejecución. El semáforo estático evita
+    // respaldos simultáneos y no necesita descartarse antes de terminar el proceso.
+    private static readonly SemaphoreSlim Semaforo = new(1, 1);
+    private volatile bool _ultimaOperacionOk = true;
 
-    private bool _ultimaOperacionOk = true;
-
-    public Task<bool> CreateAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> CreateAsync(CancellationToken cancellationToken = default)
     {
+        await Semaforo.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var origen = RutasDatos.RutaBaseActiva();
-            if (!File.Exists(origen))
-            {
-                return Task.FromResult(false);
-            }
-
-            var carpeta = RutasDatos.DirectorioRespaldos();
-            Directory.CreateDirectory(carpeta);
-
-            var destino = Path.Combine(
-                carpeta, $"registros-{DateTime.Now:yyyyMMdd-HHmmss}.db");
-
-            CopiaConsistente(origen, destino);
-            Rotar(carpeta, MaximoRespaldos);
-
-            // Espejo: siempre la copia más reciente, con nombre estable.
-            var espejo = RutasDatos.DirectorioEspejo();
-            Directory.CreateDirectory(espejo);
-            CopiaConsistente(origen, Path.Combine(espejo, "registros.db"));
-
-            _ultimaOperacionOk = true;
-            return Task.FromResult(true);
+            var resultado = await Task.Run(
+                () => CrearRespaldo(cancellationToken), cancellationToken).ConfigureAwait(false);
+            _ultimaOperacionOk = resultado;
+            return resultado;
         }
-        catch (IOException)
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception excepcion) when (excepcion is IOException or UnauthorizedAccessException or SqliteException)
         {
             _ultimaOperacionOk = false;
-            return Task.FromResult(false);
+            return false;
         }
-        catch (UnauthorizedAccessException)
+        finally
         {
-            _ultimaOperacionOk = false;
-            return Task.FromResult(false);
+            Semaforo.Release();
         }
     }
 
     public Task<BackupStatus> GetStatusAsync(CancellationToken cancellationToken = default)
     {
-        var carpeta = RutasDatos.DirectorioRespaldos();
-        var archivos = Directory.Exists(carpeta)
-            ? Directory.GetFiles(carpeta, "registros-*.db")
-            : Array.Empty<string>();
-
-        DateTime? ultimo = archivos.Length == 0
-            ? null
-            : archivos.Max(File.GetLastWriteTime);
-
-        return Task.FromResult(new BackupStatus(
-            archivos.Length,
-            ultimo,
-            carpeta,
-            RutasDatos.DirectorioEspejo(),
-            _ultimaOperacionOk));
-    }
-
-    /// <summary>Copia incluyendo los archivos WAL y SHM si existen.</summary>
-    private static void CopiaConsistente(string origen, string destino)
-    {
-        File.Copy(origen, destino, overwrite: true);
-
-        foreach (var sufijo in new[] { "-wal", "-shm" })
+        cancellationToken.ThrowIfCancellationRequested();
+        try
         {
-            var lateral = origen + sufijo;
-            if (File.Exists(lateral))
-            {
-                File.Copy(lateral, destino + sufijo, overwrite: true);
-            }
+            var carpeta = RutasDatos.DirectorioRespaldos();
+            var archivos = Directory.Exists(carpeta)
+                ? Directory.GetFiles(carpeta, "registros-*.db")
+                : Array.Empty<string>();
+
+            DateTime? ultimo = archivos.Length == 0
+                ? null
+                : archivos.Max(File.GetLastWriteTime);
+
+            return Task.FromResult(new BackupStatus(
+                archivos.Length,
+                ultimo,
+                carpeta,
+                RutasDatos.DirectorioEspejo(),
+                _ultimaOperacionOk));
+        }
+        catch (Exception excepcion) when (excepcion is IOException or UnauthorizedAccessException)
+        {
+            _ultimaOperacionOk = false;
+            return Task.FromResult(new BackupStatus(
+                0,
+                null,
+                RutasDatos.DirectorioRespaldos(),
+                RutasDatos.DirectorioEspejo(),
+                false));
         }
     }
 
-    /// <summary>Conserva solo los respaldos más recientes.</summary>
-    private static void Rotar(string carpeta, int maximo)
+    private static bool CrearRespaldo(CancellationToken cancellationToken)
     {
-        var archivos = Directory.GetFiles(carpeta, "registros-*.db")
-            .OrderByDescending(File.GetLastWriteTime)
-            .Skip(maximo)
-            .ToList();
-
-        foreach (var archivo in archivos)
+        var origen = RutasDatos.RutaBaseActiva();
+        if (!File.Exists(origen))
         {
+            return false;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var carpeta = RutasDatos.DirectorioRespaldos();
+        Directory.CreateDirectory(carpeta);
+
+        var marca = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture) + "-" +
+                    Guid.NewGuid().ToString("N")[..8];
+        var destino = Path.Combine(carpeta, $"registros-{marca}.db");
+        var temporal = destino + ".tmp-" + Guid.NewGuid().ToString("N");
+
+        try
+        {
+            using var conexionOrigen = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = origen,
+                Mode = SqliteOpenMode.ReadOnly,
+                Cache = SqliteCacheMode.Private,
+                DefaultTimeout = 5,
+            }.ToString());
+            using var conexionDestino = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = temporal,
+                Mode = SqliteOpenMode.ReadWriteCreate,
+                Cache = SqliteCacheMode.Private,
+                DefaultTimeout = 5,
+            }.ToString());
+
+            conexionOrigen.Open();
+            conexionDestino.Open();
+            cancellationToken.ThrowIfCancellationRequested();
+            conexionOrigen.BackupDatabase(conexionDestino);
+
+            using var integridad = conexionDestino.CreateCommand();
+            integridad.CommandText = "PRAGMA integrity_check;";
+            var resultado = integridad.ExecuteScalar()?.ToString();
+            if (!string.Equals(resultado, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            conexionDestino.Close();
+            conexionOrigen.Close();
+            File.Move(temporal, destino, overwrite: false);
+
+            var espejo = RutasDatos.DirectorioEspejo();
+            Directory.CreateDirectory(espejo);
+            var espejoFinal = Path.Combine(espejo, "registros.db");
+            var espejoTemporal = espejoFinal + ".tmp-" + Guid.NewGuid().ToString("N");
             try
             {
-                File.Delete(archivo);
+                File.Copy(destino, espejoTemporal, overwrite: false);
+                File.Move(espejoTemporal, espejoFinal, overwrite: true);
             }
-            catch (IOException)
+            finally
             {
-                // La rotación es best-effort.
+                IntentarEliminar(espejoTemporal);
             }
+
+            Rotar(carpeta, MaximoRespaldos);
+            return true;
+        }
+        finally
+        {
+            IntentarEliminar(temporal);
+        }
+    }
+
+    private static void Rotar(string carpeta, int maximo)
+    {
+        foreach (var archivo in Directory.GetFiles(carpeta, "registros-*.db")
+                     .OrderByDescending(File.GetLastWriteTimeUtc)
+                     .Skip(maximo))
+        {
+            IntentarEliminar(archivo);
+        }
+    }
+
+    private static void IntentarEliminar(string ruta)
+    {
+        try
+        {
+            if (File.Exists(ruta))
+            {
+                File.Delete(ruta);
+            }
+        }
+        catch (Exception excepcion) when (excepcion is IOException or UnauthorizedAccessException)
+        {
+            // La limpieza de temporales y la rotación son best-effort.
         }
     }
 }

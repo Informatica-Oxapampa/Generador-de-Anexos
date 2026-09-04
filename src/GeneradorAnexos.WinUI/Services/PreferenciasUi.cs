@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Security;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -23,6 +24,8 @@ namespace GeneradorAnexos.WinUI.Services;
 /// </remarks>
 public sealed class PreferenciasUi
 {
+    private static readonly object BloqueoArchivo = new();
+
     /// <summary>Tema: seguir a Windows.</summary>
     public const string TemaSistema = "sistema";
 
@@ -37,9 +40,23 @@ public sealed class PreferenciasUi
 
     public PreferenciasUi()
     {
-        Directory.CreateDirectory(RutaCarpeta);
         _ruta = Path.Combine(RutaCarpeta, "preferencias.json");
-        _datos = Cargar();
+        try
+        {
+            Directory.CreateDirectory(RutaCarpeta);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            // Las preferencias no son imprescindibles para abrir el programa.
+            // Se usan valores seguros en memoria y se deja constancia sin
+            // mostrar rutas del perfil del usuario.
+            Registro.Advertencia("PREFS_DIRECTORY_UNAVAILABLE");
+        }
+
+        lock (BloqueoArchivo)
+        {
+            _datos = Cargar();
+        }
     }
 
     /// <summary>Carpeta de datos del usuario para esta aplicación.</summary>
@@ -178,8 +195,12 @@ public sealed class PreferenciasUi
     /// </summary>
     public void Restablecer()
     {
-        _datos = new JsonObject();
-        Guardar();
+        lock (BloqueoArchivo)
+        {
+            _datos = new JsonObject();
+            Guardar();
+        }
+
         Registro.Info("PREFS_RESET");
     }
 
@@ -222,9 +243,12 @@ public sealed class PreferenciasUi
     /// </summary>
     private void Escribir(string clave, JsonNode? valor)
     {
-        _datos = Cargar();
-        _datos[clave] = valor;
-        Guardar();
+        lock (BloqueoArchivo)
+        {
+            _datos = Cargar();
+            _datos[clave] = valor;
+            Guardar();
+        }
     }
 
     private JsonObject Cargar()
@@ -250,6 +274,10 @@ public sealed class PreferenciasUi
         {
             Registro.Advertencia("PREFS_READ_DENIED");
         }
+        catch (SecurityException)
+        {
+            Registro.Advertencia("PREFS_READ_DENIED");
+        }
 
         return new JsonObject();
     }
@@ -268,6 +296,9 @@ public sealed class PreferenciasUi
         {
         }
         catch (UnauthorizedAccessException)
+        {
+        }
+        catch (SecurityException)
         {
         }
     }
@@ -296,6 +327,11 @@ public sealed class PreferenciasUi
             Registro.Advertencia("PREFS_WRITE_DENIED");
             DescartarTemporal(temporal);
         }
+        catch (SecurityException)
+        {
+            Registro.Advertencia("PREFS_WRITE_DENIED");
+            DescartarTemporal(temporal);
+        }
     }
 
     private static void DescartarTemporal(string ruta)
@@ -311,6 +347,9 @@ public sealed class PreferenciasUi
         {
         }
         catch (UnauthorizedAccessException)
+        {
+        }
+        catch (SecurityException)
         {
         }
     }

@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Text;
 using System.Text.Json;
 using GeneradorAnexos.Domain.Models;
 
@@ -9,15 +10,20 @@ namespace GeneradorAnexos.Domain.Serialization;
 /// <summary>Serializa el contrato JSON v1 sin descartar campos desconocidos.</summary>
 public static class PayloadJson
 {
+    /// <summary>Límite común para registros y borradores descomprimidos.</summary>
+    public const int MaxJsonBytes = 2 * 1024 * 1024;
+
     /// <summary>Deserializa y valida la versión raíz del payload.</summary>
     /// <exception cref="PayloadJsonException">
     /// El JSON está dañado, no representa un objeto válido o usa otra versión.
     /// </exception>
     public static BorradorPayloadV1 Deserialize(string json)
     {
-        if (string.IsNullOrWhiteSpace(json))
+        if (string.IsNullOrWhiteSpace(json) ||
+            Encoding.UTF8.GetByteCount(json) > MaxJsonBytes)
         {
-            throw new PayloadJsonException("El contenido JSON del registro está vacío.");
+            throw new PayloadJsonException(
+                "El contenido JSON del registro está vacío o excede el límite permitido.");
         }
 
         BorradorPayloadV1 payload;
@@ -57,7 +63,14 @@ public static class PayloadJson
                 $"se esperaba la versión {BorradorPayloadV1.VersionActual}.");
         }
 
-        return JsonSerializer.Serialize(payload, CreateOptions(indented));
+        var json = JsonSerializer.Serialize(payload, CreateOptions(indented));
+        if (Encoding.UTF8.GetByteCount(json) > MaxJsonBytes)
+        {
+            throw new PayloadJsonException(
+                "El contenido JSON del registro excede el límite permitido.");
+        }
+
+        return json;
     }
 
     private static JsonSerializerOptions CreateOptions(bool indented = false) => new()

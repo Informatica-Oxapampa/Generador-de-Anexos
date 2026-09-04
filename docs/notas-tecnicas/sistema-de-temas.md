@@ -123,7 +123,7 @@ Windows 10.
 ## Versión
 
 La versión del programa está en un único sitio, `GeneradorAnexos.WinUI.csproj`
-(ahora **1.0.1**). La aplicación la lee del ensamblado y el instalador comprueba
+(ahora **1.0.3**). La aplicación la lee del ensamblado y el instalador comprueba
 que coincida.
 
 ---

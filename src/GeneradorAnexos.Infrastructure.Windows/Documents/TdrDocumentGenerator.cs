@@ -78,13 +78,14 @@ public sealed class TdrDocumentGenerator
         var tabla = DocxTemplateEngine.BuscarTabla(cuerpo, "ENTREGABLE", "PLAZO");
         if (tabla is null)
         {
-            return;
+            throw new DocumentoException(
+                "La plantilla TDR no contiene la tabla de ENTREGABLE y PLAZO esperada.");
         }
 
         var filas = tabla.Elements<TableRow>().ToList();
         if (filas.Count < 2)
         {
-            return;
+            throw new DocumentoException("La tabla de entregables no contiene una fila modelo válida.");
         }
 
         var modelo = filas[1];
@@ -102,12 +103,15 @@ public sealed class TdrDocumentGenerator
             var cuota = plan.Cuotas[i];
             var celdas = fila.Elements<TableCell>().ToList();
 
-            if (celdas.Count >= 3)
+            if (celdas.Count < 3)
             {
-                DocxTemplateEngine.EscribirCelda(celdas[0], TdrLabels.EtiquetaEntregable(i), negrita: true);
-                DocxTemplateEngine.EscribirCelda(celdas[1], cuota.Descripcion);
-                DocxTemplateEngine.EscribirCelda(celdas[2], cuota.Plazo);
+                throw new DocumentoException(
+                    "La fila modelo de entregables debe contener al menos tres celdas.");
             }
+
+            DocxTemplateEngine.EscribirCelda(celdas[0], TdrLabels.EtiquetaEntregable(i), negrita: true);
+            DocxTemplateEngine.EscribirCelda(celdas[1], cuota.Descripcion);
+            DocxTemplateEngine.EscribirCelda(celdas[2], cuota.Plazo);
 
             anterior = fila;
         }
@@ -119,13 +123,14 @@ public sealed class TdrDocumentGenerator
         var tabla = DocxTemplateEngine.BuscarTabla(cuerpo, "PAGO", "PORCENTAJE");
         if (tabla is null)
         {
-            return;
+            throw new DocumentoException(
+                "La plantilla TDR no contiene la tabla de PAGO y PORCENTAJE esperada.");
         }
 
         var filas = tabla.Elements<TableRow>().ToList();
         if (filas.Count < 2)
         {
-            return;
+            throw new DocumentoException("La tabla de pagos no contiene una fila modelo válida.");
         }
 
         var modelo = filas[1];
@@ -148,12 +153,15 @@ public sealed class TdrDocumentGenerator
             var cuota = plan.Cuotas[i];
             var celdas = fila.Elements<TableCell>().ToList();
 
-            if (celdas.Count >= 3)
+            if (celdas.Count < 3)
             {
-                DocxTemplateEngine.EscribirCelda(celdas[0], TdrLabels.EtiquetaPago(i), negrita: true);
-                DocxTemplateEngine.EscribirCelda(celdas[1], cuota.Condicion);
-                DocxTemplateEngine.EscribirCelda(celdas[2], $"{cuota.Porcentaje} %");
+                throw new DocumentoException(
+                    "La fila modelo de pagos debe contener al menos tres celdas.");
             }
+
+            DocxTemplateEngine.EscribirCelda(celdas[0], TdrLabels.EtiquetaPago(i), negrita: true);
+            DocxTemplateEngine.EscribirCelda(celdas[1], cuota.Condicion);
+            DocxTemplateEngine.EscribirCelda(celdas[2], $"{cuota.Porcentaje} %");
 
             anterior = fila;
         }
@@ -161,13 +169,16 @@ public sealed class TdrDocumentGenerator
         if (filaTotal is not null)
         {
             var celdas = filaTotal.Elements<TableCell>().ToList();
-            if (celdas.Count >= 1)
+            if (celdas.Count == 0)
             {
-                DocxTemplateEngine.EscribirCelda(
-                    celdas[^1],
-                    $"{plan.Cuotas.Sum(c => c.Porcentaje)} %",
-                    negrita: true);
+                throw new DocumentoException(
+                    "La fila TOTAL de pagos no contiene ninguna celda.");
             }
+
+            DocxTemplateEngine.EscribirCelda(
+                celdas[^1],
+                $"{plan.Cuotas.Sum(c => c.Porcentaje)} %",
+                negrita: true);
         }
     }
 }

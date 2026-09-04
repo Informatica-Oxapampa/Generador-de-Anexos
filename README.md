@@ -19,7 +19,7 @@ Desarrollada por la **Oficina de Tecnología de la Información** de la
   dos veces.
 - Calcula el plan de pagos según los entregables definidos.
 - Guarda registros para reutilizarlos, con autoguardado y copias de seguridad.
-- Se actualiza sola desde las versiones publicadas en este repositorio.
+- Comprueba actualizaciones firmadas desde las versiones publicadas en este repositorio.
 
 ## Requisitos
 
@@ -27,29 +27,34 @@ Desarrollada por la **Oficina de Tecnología de la Información** de la
 - Arquitectura de 64 bits.
 - Aproximadamente 350 MB de espacio libre.
 
-No hace falta instalar .NET ni ningún otro componente por separado: el
-instalador los incluye.
+Para **usar el programa instalado** no hace falta instalar .NET por separado:
+la publicación es autocontenida. El equipo sí necesita Microsoft Visual C++
+2015–2022 (x64); el instalador lo
+incluye si el archivo oficial `VC_redist.x64.exe` fue agregado al compilar y,
+si no, se detiene con una explicación antes de copiar el programa.
 
 ## Instalación
 
 Descargue el instalador de la última versión desde la sección
-[Releases](../../releases) y ejecútelo. El asistente le guiará en el proceso.
+[Releases](https://github.com/Informatica-Oxapampa/Generador-de-Anexos/releases)
+y ejecútelo. El asistente le guiará en el proceso.
 
 Para verificar la descarga, compare su resumen SHA-256 con el publicado en
 `SHA256SUMS.txt` de esa misma versión:
 
 ```powershell
-Get-FileHash .\GeneradorAnexos-1.0.1-Setup.exe -Algorithm SHA256
+Get-FileHash .\GeneradorAnexos-1.0.3-Setup.exe -Algorithm SHA256
 ```
 
 ## Actualizaciones
 
-Una vez instalado, el programa comprueba por su cuenta si hay una versión más
-reciente y ofrece instalarla. También puede buscarlas manualmente desde
-**Configuración › Actualizaciones**.
+Una vez configurada la huella del certificado institucional, el programa
+comprueba si hay una versión más reciente y ofrece instalarla. También puede
+buscarlas manualmente desde **Configuración › Actualizaciones**. Si la firma
+falta o no coincide, la actualización se rechaza.
 
-Las plantillas de Word se actualizan por un canal aparte, sin necesidad de
-reinstalar el programa ni de permisos de administrador.
+Las plantillas de Word se actualizan por un canal aparte y firmado, sin
+necesidad de reinstalar el programa ni de permisos de administrador.
 
 ## Documentación
 
@@ -79,9 +84,16 @@ docs/         Documentación
 compilar.cmd
 ```
 
-Requiere el SDK de .NET 8 y la carga de trabajo de Windows App SDK. El detalle
-está en [docs/COMO-COMPILAR.md](docs/COMO-COMPILAR.md). `compilar.cmd` está en
-la **raíz** del repositorio.
+Para **compilar el código fuente** sí se requiere el SDK de .NET 8. Si no está
+instalado, puede obtenerse desde una consola con:
+
+```bat
+winget install --id Microsoft.DotNet.SDK.8 --exact --source winget
+```
+
+Después cierre y vuelva a abrir la consola. El detalle está en
+[docs/COMO-COMPILAR.md](docs/COMO-COMPILAR.md). `compilar.cmd` está en la
+**raíz** del repositorio.
 
 ```bat
 dotnet run --project tests\GeneradorAnexos.Domain.Tests

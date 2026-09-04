@@ -31,6 +31,7 @@
             </Grid.ColumnDefinitions>
 
             <AutoSuggestBox x:Name="Buscador" Grid.Column="0"
+                            AutomationProperties.Name="Buscar registros por nombre"
                             MaxWidth="420"
                             MinHeight="34"
                             FontSize="14"
@@ -40,9 +41,23 @@
                             VerticalAlignment="Center"
                             TextChanged="AlBuscar" />
 
-            <TextBlock x:Name="Contador" Grid.Column="1"
-                       Style="{StaticResource Ga.RegistroFecha}"
-                       VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
+                        VerticalAlignment="Center">
+                <TextBlock x:Name="Contador"
+                           Style="{StaticResource Ga.RegistroFecha}"
+                           VerticalAlignment="Center" />
+
+                <!-- Sustituye a «Guardar como…» del panel lateral: aquí, junto a
+                     los registros, se entiende mejor qué hace. -->
+                <Button Style="{StaticResource Ga.BotonSecundarioCompacto}"
+                        Click="AlGuardarComoNuevo"
+                        ToolTipService.ToolTip="Guarda lo que hay ahora en el formulario como un registro nuevo (Ctrl+Mayús+S)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <controls:Icono Nombre="save" Tamano="14" />
+                        <TextBlock Text="Guardar como nuevo" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <!-- Lista de registros -->
@@ -93,7 +108,7 @@
 
                                         <Button Style="{StaticResource Ga.BotonPrimarioCompacto}"
                                                 Click="AlCargar"
-                                                ToolTipService.ToolTip="Cargar en el formulario">
+                                                ToolTipService.ToolTip="Abrir el registro en el formulario">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <controls:Icono Nombre="folder" Tamano="14"
                                                                 Trazo="{ThemeResource Ga.SobreAcento}" />
@@ -104,8 +119,8 @@
                                         <!-- Deshabilitado si el registro no guarda un TDR real -->
                                         <Button Style="{StaticResource Ga.BotonSecundarioCompacto}"
                                                 IsEnabled="{x:Bind TieneTdr}"
-                                                Click="AlGenerarTdr"
-                                                ToolTipService.ToolTip="Generar el TDR de este registro">
+                                                Click="AlAbrirEnTdr"
+                                                ToolTipService.ToolTip="Abrir este registro en la sección de TDR">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <controls:Icono Nombre="clipboard" Tamano="14" />
                                                 <TextBlock Text="TDR" VerticalAlignment="Center" />
@@ -115,8 +130,8 @@
                                         <!-- Deshabilitado si el registro no guarda un Anexo real -->
                                         <Button Style="{StaticResource Ga.BotonSecundarioCompacto}"
                                                 IsEnabled="{x:Bind TieneAnexo}"
-                                                Click="AlGenerarAnexo"
-                                                ToolTipService.ToolTip="Generar el Anexo de este registro">
+                                                Click="AlAbrirEnAnexos"
+                                                ToolTipService.ToolTip="Abrir este registro en la sección de Anexos">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <controls:Icono Nombre="file-check" Tamano="14" />
                                                 <TextBlock Text="Anexo" VerticalAlignment="Center" />
@@ -124,13 +139,22 @@
                                         </Button>
 
                                         <Button Style="{StaticResource Ga.BotonIcono}"
+                                                Click="AlDuplicar"
+                                                AutomationProperties.Name="Duplicar registro"
+                                                ToolTipService.ToolTip="Duplicar: crea una copia con otro nombre">
+                                            <controls:Icono Nombre="file" Tamano="15" />
+                                        </Button>
+
+                                        <Button Style="{StaticResource Ga.BotonIcono}"
                                                 Click="AlRenombrar"
+                                                AutomationProperties.Name="Renombrar registro"
                                                 ToolTipService.ToolTip="Renombrar">
                                             <controls:Icono Nombre="edit" Tamano="15" />
                                         </Button>
 
                                         <Button Style="{StaticResource Ga.BotonIconoEliminar}"
                                                 Click="AlEliminar"
+                                                AutomationProperties.Name="Eliminar registro"
                                                 ToolTipService.ToolTip="Eliminar">
                                             <controls:Icono Nombre="trash" Tamano="15" />
                                         </Button>
@@ -163,7 +187,7 @@
                     <TextBlock Style="{StaticResource Ga.RegistroFecha}"
                                TextAlignment="Center"
                                MaxWidth="380"
-                               Text="Complete el formulario y use «Guardar» en el panel lateral para conservarlo." />
+                               Text="Use «Nuevo registro» para asignarle un nombre. Después, «Guardar» actualizará ese mismo registro." />
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>

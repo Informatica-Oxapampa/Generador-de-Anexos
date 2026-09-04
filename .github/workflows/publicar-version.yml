@@ -1,18 +1,4 @@
-# ════════════════════════════════════════════════════════════════════════════
-#  Publicación de una versión del programa
-#
-#  Se dispara SOLO al crear una etiqueta con formato  v1.2.3
-#  Los commits del día a día NO disparan nada: puede hacer todos los push que
-#  quiera desde GitHub Desktop sin que llegue nada a los equipos.
-#
-#  Qué hace:
-#    1. Compila y publica la aplicación (autocontenida, x64).
-#    2. Comprueba que la versión del proyecto coincide con la etiqueta.
-#    3. Genera el instalador con Inno Setup.
-#    4. Calcula el SHA-256 y el tamaño.
-#    5. Escribe update.json con los dos canales (programa y plantillas).
-#    6. Crea la Release y adjunta los archivos.
-# ════════════════════════════════════════════════════════════════════════════
+# Publicación firmada del programa. Solo crea una Release en borrador.
 name: Publicar versión
 
 on:
@@ -22,26 +8,34 @@ on:
   workflow_dispatch:
     inputs:
       etiqueta:
-        description: 'Etiqueta a publicar, por ejemplo v1.0.1'
+        description: 'Etiqueta a publicar, por ejemplo v1.0.3'
         required: true
 
 permissions:
   contents: write
 
+concurrency:
+  group: publicar-version-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
 jobs:
   publicar:
     runs-on: windows-latest
-
+    environment: produccion
     steps:
       - name: Descargar el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Preparar .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@d4c94342e560b34958eacfc5d055d21461ed1c5d # v4.3.1
         with:
           dotnet-version: '8.0.x'
 
-      - name: Determinar la versión
+      - name: Determinar y validar la versión
         id: version
         shell: pwsh
         run: |
@@ -50,109 +44,167 @@ jobs:
           } else {
             '${{ github.event.inputs.etiqueta }}'
           }
-          $version = $etiqueta -replace '^v', ''
-          "etiqueta=$etiqueta" >> $env:GITHUB_OUTPUT
-          "version=$version"   >> $env:GITHUB_OUTPUT
-          Write-Host "Publicando $etiqueta (version $version)"
-
-      - name: Comprobar que el proyecto declara esa misma versión
-        shell: pwsh
-        run: |
+          if ($etiqueta -notmatch '^v\d+\.\d+\.\d+$') { throw "Etiqueta inválida: $etiqueta" }
+          $version = $etiqueta.Substring(1)
           $csproj = 'src/GeneradorAnexos.WinUI/GeneradorAnexos.WinUI.csproj'
           $declarada = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version |
-                        Where-Object { $_ } | Select-Object -First 1
-          if ($declarada -ne '${{ steps.version.outputs.version }}') {
-            Write-Error "El csproj declara $declarada pero la etiqueta es ${{ steps.version.outputs.version }}. Iguálelos antes de publicar."
-            exit 1
+            Where-Object { $_ } | Select-Object -First 1
+          if ($declarada -ne $version) {
+            throw "El proyecto declara $declarada y la etiqueta $version."
           }
-          Write-Host "Version coherente: $declarada"
+          "etiqueta=$etiqueta" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
 
-      - name: Publicar la aplicación
+      - name: Preparar y validar el certificado institucional
+        id: firma
+        shell: pwsh
+        env:
+          CERTIFICADO_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          CERTIFICADO_CLAVE: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERTIFICADO_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:CERTIFICADO_CLAVE)) {
+            throw 'Faltan los secretos de firma. No se permite publicar sin certificado.'
+          }
+          New-Item -ItemType Directory -Force .signing | Out-Null
+          $pfx = (Resolve-Path .signing).Path + '\code-signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERTIFICADO_BASE64))
+          $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $pfx, $env:CERTIFICADO_CLAVE,
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
+          $ahora = (Get-Date).ToUniversalTime()
+          $firmaCodigo = @($cert.Extensions |
+            Where-Object { $_.Oid.Value -eq '2.5.29.37' } |
+            ForEach-Object { $_.EnhancedKeyUsages } |
+            Where-Object { $_.Value -eq '1.3.6.1.5.5.7.3.3' })
+          if (-not $cert.HasPrivateKey -or
+              $cert.NotBefore.ToUniversalTime() -gt $ahora -or
+              $cert.NotAfter.ToUniversalTime() -le $ahora -or
+              $firmaCodigo.Count -eq 0) {
+            throw 'El certificado no es válido para firma de código en la fecha actual.'
+          }
+          $hash = $cert.GetCertHashString([Security.Cryptography.HashAlgorithmName]::SHA256)
+          $config = Get-Content 'src/GeneradorAnexos.WinUI/Services/Actualizaciones/ConfiguracionActualizaciones.cs' -Raw
+          if ($config -notmatch [regex]::Escape($hash)) {
+            throw "La huella SHA-256 $hash no está fijada en ConfiguracionActualizaciones.cs."
+          }
+          "pfx=$pfx" >> $env:GITHUB_OUTPUT
+
+      - name: Ejecutar pruebas antes de publicar
         shell: pwsh
         run: |
+          dotnet run --project tests/GeneradorAnexos.Domain.Tests/GeneradorAnexos.Domain.Tests.csproj -c Release
+          dotnet run --project tests/OrderPdfReader.Regression/OrderPdfReader.Regression.csproj -c Release
+
+      - name: Publicar la aplicación desde una carpeta limpia
+        shell: pwsh
+        run: |
+          Remove-Item publicado -Recurse -Force -ErrorAction SilentlyContinue
           dotnet publish src/GeneradorAnexos.WinUI/GeneradorAnexos.WinUI.csproj `
-            -c Release -r win-x64 --self-contained true `
-            -p:Platform=x64 -o publicado
+            -c Release -r win-x64 --self-contained true -p:Platform=x64 -o publicado
           if (-not (Test-Path 'publicado/GeneradorAnexos.exe')) {
-            Write-Error 'La publicacion no genero el ejecutable.'
-            exit 1
+            throw 'La publicación no generó GeneradorAnexos.exe.'
           }
 
-      - name: Instalar Inno Setup
+      - name: Localizar SignTool y firmar la aplicación
+        id: signtool
         shell: pwsh
-        run: choco install innosetup --no-progress -y
-
-      - name: Generar el instalador
-        shell: pwsh
+        env:
+          CERTIFICADO_CLAVE: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
         run: |
+          $tool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
+            -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $tool) { throw 'No se encontró SignTool x64.' }
+          & $tool.FullName sign /fd SHA256 /tr https://timestamp.digicert.com /td SHA256 `
+            /f '${{ steps.firma.outputs.pfx }}' /p $env:CERTIFICADO_CLAVE `
+            publicado\GeneradorAnexos.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Falló la firma de la aplicación.' }
+          & $tool.FullName verify /pa /all /v publicado\GeneradorAnexos.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Falló la verificación de la aplicación.' }
+          "ruta=$($tool.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Instalar Inno Setup fijado
+        shell: pwsh
+        run: choco install innosetup --version=6.4.3 --no-progress -y
+
+      - name: Generar y firmar el instalador
+        shell: pwsh
+        env:
+          CERTIFICADO_CLAVE: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          Remove-Item 'instalador\salida' -Recurse -Force -ErrorAction SilentlyContinue
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
           & $iscc /Q instalador\GeneradorAnexos.iss
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $setup = Get-ChildItem 'instalador\salida\GeneradorAnexos-*-Setup.exe' -ErrorAction SilentlyContinue
-          if (-not $setup) {
-            Write-Error 'Inno Setup no genero el Setup.exe. Revise instalador/GeneradorAnexos.iss y la carpeta publicado.'
-            exit 1
-          }
+          if ($LASTEXITCODE -ne 0) { throw 'Falló Inno Setup.' }
+          $setup = Get-ChildItem 'instalador\salida\GeneradorAnexos-*-Setup.exe' |
+            Select-Object -First 1
+          if (-not $setup) { throw 'No se generó el instalador.' }
+          & '${{ steps.signtool.outputs.ruta }}' sign /fd SHA256 `
+            /tr https://timestamp.digicert.com /td SHA256 `
+            /f '${{ steps.firma.outputs.pfx }}' /p $env:CERTIFICADO_CLAVE $setup.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Falló la firma del instalador.' }
+          & '${{ steps.signtool.outputs.ruta }}' verify /pa /all /v $setup.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Falló la verificación del instalador.' }
 
-      - name: Empaquetar las plantillas
+      - name: Crear paquetes y manifiesto
         shell: pwsh
         run: |
-          $plantillas = (Get-Content 'plantillas/version.txt' -Raw).Trim()
-          "plantillas=$plantillas" >> $env:GITHUB_OUTPUT
-          New-Item -ItemType Directory -Force -Path salida | Out-Null
-          Compress-Archive -Path plantillas\* -DestinationPath "salida\plantillas-$plantillas.zip" -Force
-        id: plantillas
-
-      - name: Calcular hashes y escribir update.json
-        shell: pwsh
-        run: |
-          $version    = '${{ steps.version.outputs.version }}'
-          $etiqueta   = '${{ steps.version.outputs.etiqueta }}'
-          $plantVer   = '${{ steps.plantillas.outputs.plantillas }}'
-          $base       = "https://github.com/${{ github.repository }}/releases/download/$etiqueta"
-
-          $setup = Get-ChildItem "instalador\salida\*.exe" | Select-Object -First 1
-          $zip   = Get-ChildItem "salida\plantillas-*.zip"  | Select-Object -First 1
-
+          Remove-Item salida -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory salida | Out-Null
+          $plantVer = (Get-Content 'plantillas/version.txt' -Raw).Trim()
+          if ($plantVer -notmatch '^\d+\.\d+\.\d+$') { throw 'Versión de plantillas inválida.' }
+          Compress-Archive -Path plantillas\* -DestinationPath "salida\plantillas-$plantVer.zip"
+          $setupOriginal = Get-ChildItem 'instalador\salida\GeneradorAnexos-*-Setup.exe' | Select-Object -First 1
+          Copy-Item $setupOriginal.FullName salida\
+          $setup = Get-Item (Join-Path salida $setupOriginal.Name)
+          $zip = Get-Item "salida\plantillas-$plantVer.zip"
+          $version = '${{ steps.version.outputs.version }}'
+          $etiqueta = '${{ steps.version.outputs.etiqueta }}'
+          $base = "https://github.com/${{ github.repository }}/releases/download/$etiqueta"
           $manifiesto = [ordered]@{
-            manifiesto = 1
-            publicado  = (Get-Date).ToUniversalTime().ToString('o')
-            release    = $etiqueta
+            manifiesto = 1; publicado = (Get-Date).ToUniversalTime().ToString('o'); release = $etiqueta
             app = [ordered]@{
-              version     = $version
-              fecha       = (Get-Date).ToString('yyyy-MM-dd')
-              url         = "$base/$($setup.Name)"
-              sha256      = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash
-              tamano      = $setup.Length
-              obligatoria = $false
-              notas       = @()
+              version = $version; fecha = (Get-Date).ToString('yyyy-MM-dd')
+              url = "$base/$($setup.Name)"; sha256 = (Get-FileHash $setup -Algorithm SHA256).Hash
+              tamano = $setup.Length; obligatoria = $false; versionMinima = ''; notas = @()
             }
             plantillas = [ordered]@{
-              version  = $plantVer
-              fecha    = (Get-Date).ToString('yyyy-MM-dd')
-              url      = "$base/$($zip.Name)"
-              sha256   = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash
-              tamano   = $zip.Length
-              archivos = @('plantilla_anexos.docx', 'plantilla_tdr.docx')
-              notas    = @()
+              version = $plantVer; fecha = (Get-Date).ToString('yyyy-MM-dd')
+              url = "$base/$($zip.Name)"; sha256 = (Get-FileHash $zip -Algorithm SHA256).Hash
+              tamano = $zip.Length; archivos = @('plantilla_anexos.docx', 'plantilla_tdr.docx'); notas = @()
             }
           }
+          $manifiesto | ConvertTo-Json -Depth 6 | Set-Content salida\update.json -Encoding utf8
 
-          $manifiesto | ConvertTo-Json -Depth 6 |
-            Set-Content -Path 'salida\update.json' -Encoding utf8
+      - name: Firmar y verificar el manifiesto
+        shell: pwsh
+        env:
+          CERTIFICADO_CLAVE: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          Add-Type -AssemblyName System.Security.Cryptography.Pkcs
+          $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            '${{ steps.firma.outputs.pfx }}', $env:CERTIFICADO_CLAVE,
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path salida\update.json))
+          $cms = [Security.Cryptography.Pkcs.SignedCms]::new(
+            [Security.Cryptography.Pkcs.ContentInfo]::new($bytes), $true)
+          $signer = [Security.Cryptography.Pkcs.CmsSigner]::new($cert)
+          $signer.IncludeOption = [Security.Cryptography.X509Certificates.X509IncludeOption]::EndCertOnly
+          $cms.ComputeSignature($signer, $false)
+          [IO.File]::WriteAllBytes((Join-Path (Resolve-Path salida) 'update.json.p7s'), $cms.Encode())
+          $verificar = [Security.Cryptography.Pkcs.SignedCms]::new(
+            [Security.Cryptography.Pkcs.ContentInfo]::new($bytes), $true)
+          $verificar.Decode([IO.File]::ReadAllBytes((Resolve-Path salida\update.json.p7s)))
+          $verificar.CheckSignature($true)
+          Get-ChildItem salida -File | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash)  $($_.Name)"
+          } | Set-Content salida\SHA256SUMS.txt -Encoding ascii
 
-          # Listado de comprobación, útil para verificar a mano una descarga.
-          "$((Get-FileHash $setup.FullName -Algorithm SHA256).Hash)  $($setup.Name)" |
-            Set-Content 'salida\SHA256SUMS.txt' -Encoding ascii
-          "$((Get-FileHash $zip.FullName -Algorithm SHA256).Hash)  $($zip.Name)" |
-            Add-Content 'salida\SHA256SUMS.txt' -Encoding ascii
-
-          Copy-Item $setup.FullName salida\
-          Get-Content 'salida\update.json'
-
-      - name: Crear la Release y adjuntar los archivos
-        uses: softprops/action-gh-release@v2
+      - name: Crear la Release en borrador
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
         with:
           tag_name: ${{ steps.version.outputs.etiqueta }}
           name: ${{ steps.version.outputs.etiqueta }}
@@ -162,4 +214,10 @@ jobs:
             salida/*.exe
             salida/plantillas-*.zip
             salida/update.json
+            salida/update.json.p7s
             salida/SHA256SUMS.txt
+
+      - name: Eliminar el certificado temporal
+        if: always()
+        shell: pwsh
+        run: Remove-Item .signing -Recurse -Force -ErrorAction SilentlyContinue

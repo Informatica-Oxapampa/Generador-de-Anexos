@@ -126,7 +126,7 @@
                 <muxc:NavigationViewItem x:Name="ElementoNuevo"
                                          Content="Nuevo registro"
                                          SelectsOnInvoked="False"
-                                         ToolTipService.ToolTip="Empezar un registro nuevo y en blanco (Ctrl+N)">
+                                         ToolTipService.ToolTip="Crear un registro nuevo, asignarle un nombre y abrirlo en blanco (Ctrl+N)">
                     <muxc:NavigationViewItem.Icon>
                         <SymbolIcon Symbol="Add" />
                     </muxc:NavigationViewItem.Icon>
@@ -138,15 +138,6 @@
                                          ToolTipService.ToolTip="Guardar los cambios en el registro activo (Ctrl+S)">
                     <muxc:NavigationViewItem.Icon>
                         <SymbolIcon Symbol="Save" />
-                    </muxc:NavigationViewItem.Icon>
-                </muxc:NavigationViewItem>
-
-                <muxc:NavigationViewItem x:Name="ElementoGuardarComo"
-                                         Content="Guardar como…"
-                                         SelectsOnInvoked="False"
-                                         ToolTipService.ToolTip="Guardar una copia con otro nombre (Ctrl+Mayús+S)">
-                    <muxc:NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Copy" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.FooterMenuItems>
@@ -201,11 +192,12 @@
                         </Grid>
                     </Border>
 
-                    <!-- Fecha automática del documento (no editable) -->
-                    <Border Grid.Column="2"
+                    <!-- Fecha con la que se generan los documentos -->
+                    <Border x:Name="TarjetaFecha"
+                            Grid.Column="2"
                             Style="{StaticResource Ga.TarjetaFecha}"
                             VerticalAlignment="Center"
-                            ToolTipService.ToolTip="Fecha automática del día (no editable)">
+                            ToolTipService.ToolTip="Fecha con la que se generarán los documentos">
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -221,6 +213,18 @@
                                            Style="{StaticResource Ga.FechaEtiqueta}" />
                                 <TextBlock x:Name="FechaValor"
                                            Style="{StaticResource Ga.FechaValor}" />
+
+                                <!-- Solo aparece cuando la fecha no es la de hoy, que en
+                                     la práctica significa que se cargó un registro
+                                     guardado otro día. -->
+                                <HyperlinkButton x:Name="BotonFechaHoy"
+                                                 Content="Actualizar a hoy"
+                                                 Visibility="Collapsed"
+                                                 Padding="0,2,0,0"
+                                                 FontSize="12"
+                                                 HorizontalAlignment="Left"
+                                                 Click="AlActualizarFechaAHoy"
+                                                 ToolTipService.ToolTip="Poner la fecha de hoy en el documento" />
                             </StackPanel>
                         </Grid>
                     </Border>

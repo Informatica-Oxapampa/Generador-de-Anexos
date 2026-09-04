@@ -20,7 +20,7 @@ public static class FieldValidators
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex ClasificadorRegex = new(
-        @"^\d(\.\d+){2,}$",
+        @"^[0-9]{1,2}(?:\.[0-9]{1,2}){5}$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly HashSet<string> PrefijosRuc = new(StringComparer.Ordinal)
@@ -69,7 +69,7 @@ public static class FieldValidators
         IsAllDigits(text) && text!.Length == LongitudCci;
 
     public static bool IsValidEmail(string? text) =>
-        text is not null && EmailRegex.IsMatch(text.Trim());
+        text is not null && text.Trim().Length <= 254 && EmailRegex.IsMatch(text.Trim());
 
     public static bool IsValidPhone(string? text)
     {
@@ -81,9 +81,13 @@ public static class FieldValidators
         var digits = 0;
         foreach (var character in text)
         {
-            if (char.IsDigit(character))
+            if (character is >= '0' and <= '9')
             {
                 digits++;
+            }
+            else if (character != ' ')
+            {
+                return false;
             }
         }
 
@@ -91,7 +95,7 @@ public static class FieldValidators
     }
 
     public static bool IsValidClassifier(string? text) =>
-        text is not null && ClasificadorRegex.IsMatch(text.Trim());
+        text is not null && ClasificadorRegex.IsMatch(text.Trim()) && text.Trim().StartsWith("2.", StringComparison.Ordinal);
 
     public static bool IsNonEmptyText(string? text) =>
         !string.IsNullOrWhiteSpace(text);
@@ -106,7 +110,7 @@ public static class FieldValidators
 
         foreach (var character in text!)
         {
-            if (char.GetNumericValue(character) > 0)
+            if (character > '0')
             {
                 return true;
             }
@@ -124,7 +128,7 @@ public static class FieldValidators
 
         foreach (var character in text)
         {
-            if (!char.IsDigit(character))
+            if (character is < '0' or > '9')
             {
                 return false;
             }
@@ -151,6 +155,5 @@ public static class FieldValidators
         };
     }
 
-    private static int DigitValue(char character) =>
-        checked((int)char.GetNumericValue(character));
+    private static int DigitValue(char character) => character - '0';
 }

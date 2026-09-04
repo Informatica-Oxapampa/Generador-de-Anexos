@@ -154,7 +154,11 @@ public static class Registro
 
         if (excepcion is not null)
         {
-            linea += Environment.NewLine + excepcion;
+            // No se escriben Message, StackTrace ni ToString(): pueden incluir
+            // nombres de personas, rutas de documentos, URLs o datos de SQLite.
+            linea += string.Create(
+                CultureInfo.InvariantCulture,
+                $" [{excepcion.GetType().Name}; HRESULT=0x{excepcion.HResult:X8}]");
         }
 
         Debug.WriteLine(linea);

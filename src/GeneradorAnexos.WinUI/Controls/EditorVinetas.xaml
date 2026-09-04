@@ -47,10 +47,13 @@
 
                         <TextBox Grid.Column="1"
                                  Style="{StaticResource Ga.CajaTexto}"
+                                 MaxLength="2000"
+                                 AutomationProperties.Name="Elemento de la lista"
                                  Text="{x:Bind Texto, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  PlaceholderText="{x:Bind Marcador, Mode=OneWay}" />
 
                         <Button Grid.Column="2"
+                                AutomationProperties.Name="Subir elemento"
                                 Style="{StaticResource Ga.BotonIcono}"
                                 Visibility="{x:Bind MostrarReordenar, Mode=OneWay}"
                                 IsEnabled="{x:Bind PuedeSubir, Mode=OneWay}"
@@ -60,6 +63,7 @@
                         </Button>
 
                         <Button Grid.Column="3"
+                                AutomationProperties.Name="Bajar elemento"
                                 Style="{StaticResource Ga.BotonIcono}"
                                 Visibility="{x:Bind MostrarReordenar, Mode=OneWay}"
                                 IsEnabled="{x:Bind PuedeBajar, Mode=OneWay}"
@@ -69,6 +73,7 @@
                         </Button>
 
                         <Button Grid.Column="4"
+                                AutomationProperties.Name="Eliminar elemento"
                                 Style="{StaticResource Ga.BotonIconoEliminar}"
                                 Click="AlEliminar"
                                 ToolTipService.ToolTip="Eliminar">

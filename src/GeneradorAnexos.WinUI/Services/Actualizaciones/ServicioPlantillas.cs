@@ -2,8 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Text.Json;
+using System.Xml;
+using System.Xml.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
 using GeneradorAnexos.Infrastructure.Windows.Documents;
 
 namespace GeneradorAnexos.WinUI.Services.Actualizaciones;
@@ -34,12 +39,21 @@ namespace GeneradorAnexos.WinUI.Services.Actualizaciones;
 /// </remarks>
 public static class ServicioPlantillas
 {
+    private const int MaximoEntradasPaquete = 100;
+    private const int MaximoEntradasDocx = 2000;
+    private const long MaximoExtraidoPaquete = 60L * 1024 * 1024;
+    private const long MaximoExtraidoDocx = 50L * 1024 * 1024;
+    private const long MaximoArchivoIndividual = 20L * 1024 * 1024;
+    private const int MaximaRelacionCompresion = 100;
     /// <summary>Plantillas que debe contener todo paquete válido.</summary>
     private static readonly string[] Obligatorias =
     {
         "plantilla_anexos.docx",
         "plantilla_tdr.docx",
     };
+    private static readonly HashSet<string> ArchivosPermitidosPaquete = new(
+        Obligatorias.Concat(new[] { "catalogos.json", "version.txt" }),
+        StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Carpeta de plantillas administradas por el usuario.</summary>
     public static string Carpeta { get; } = Path.Combine(
@@ -54,7 +68,7 @@ public static class ServicioPlantillas
     /// </summary>
     public static void Inicializar()
     {
-        RutasPlantillas.CarpetaPreferida = Directory.Exists(Carpeta) ? Carpeta : null;
+        RutasPlantillas.CarpetaPreferida = ConjuntoValido(Carpeta) ? Carpeta : null;
         Registro.Info("TEMPLATES_SOURCE_" + (RutasPlantillas.CarpetaPreferida is null ? "BUNDLED" : "USER"));
     }
 
@@ -64,7 +78,8 @@ public static class ServicioPlantillas
     /// </summary>
     public static VersionSemantica VersionInstalada()
     {
-        if (VersionSemantica.TryParse(LeerTexto(ArchivoVersion), out var usuario))
+        if (ConjuntoValido(Carpeta) &&
+            VersionSemantica.TryParse(LeerTexto(ArchivoVersion), out var usuario))
         {
             return usuario;
         }
@@ -79,7 +94,7 @@ public static class ServicioPlantillas
     public static string VersionInstaladaTexto()
     {
         var version = VersionInstalada();
-        var origen = Directory.Exists(Carpeta) ? "actualizadas" : "incluidas con el programa";
+        var origen = ConjuntoValido(Carpeta) ? "actualizadas" : "incluidas con el programa";
         return $"v{version} ({origen})";
     }
 
@@ -92,12 +107,19 @@ public static class ServicioPlantillas
         VersionSemantica version,
         CancellationToken cancelacion)
     {
-        var temporal = Carpeta + ".nuevo";
-        var anterior = Carpeta + ".anterior";
+        var sufijo = Guid.NewGuid().ToString("N");
+        var temporal = Carpeta + ".nuevo-" + sufijo;
+        var anterior = Carpeta + ".anterior-" + sufijo;
+        var carpetaApartada = false;
 
         try
         {
-            BorrarCarpeta(temporal);
+            if (!ValidarPaqueteZip(rutaPaquete))
+            {
+                Registro.Advertencia("TEMPLATES_PACKAGE_REJECTED");
+                return false;
+            }
+
             Directory.CreateDirectory(temporal);
 
             // ExtractToDirectory rechaza por sí solo las entradas cuya ruta
@@ -120,6 +142,13 @@ public static class ServicioPlantillas
                 }
             }
 
+
+            if (!ConjuntoValido(temporal))
+            {
+                Registro.Advertencia("TEMPLATES_CONTENT_INVALID");
+                return false;
+            }
+
             await File.WriteAllTextAsync(
                 Path.Combine(temporal, "version.txt"),
                 version.ToString(),
@@ -127,28 +156,29 @@ public static class ServicioPlantillas
 
             // Sustitución: primero se aparta la carpeta buena, después se
             // promueve la nueva. Si el segundo paso fallara, se restaura.
-            BorrarCarpeta(anterior);
-
             if (Directory.Exists(Carpeta))
             {
                 Directory.Move(Carpeta, anterior);
+                carpetaApartada = true;
             }
 
             try
             {
                 Directory.Move(temporal, Carpeta);
             }
-            catch (IOException)
+            catch
             {
                 if (Directory.Exists(anterior) && !Directory.Exists(Carpeta))
                 {
                     Directory.Move(anterior, Carpeta);
+                    carpetaApartada = false;
                 }
 
                 throw;
             }
 
             BorrarCarpeta(anterior);
+            carpetaApartada = false;
             Inicializar();
 
             // El paquete puede traer catálogos nuevos (áreas usuarias, bancos):
@@ -161,8 +191,30 @@ public static class ServicioPlantillas
         catch (Exception excepcion)
         {
             Registro.Error("TEMPLATES_INSTALL_FAILED", excepcion);
-            BorrarCarpeta(temporal);
+            if (carpetaApartada && Directory.Exists(anterior) && !Directory.Exists(Carpeta))
+            {
+                try
+                {
+                    Directory.Move(anterior, Carpeta);
+                    carpetaApartada = false;
+                }
+                catch (Exception restauracion)
+                {
+                    Registro.Critico("TEMPLATES_ROLLBACK_FAILED", restauracion);
+                }
+            }
+
             return false;
+        }
+        finally
+        {
+            BorrarCarpeta(temporal);
+            if (!carpetaApartada)
+            {
+                BorrarCarpeta(anterior);
+            }
+
+            IntentarEliminarArchivo(rutaPaquete);
         }
     }
 
@@ -174,7 +226,11 @@ public static class ServicioPlantillas
     {
         try
         {
-            BorrarCarpeta(Carpeta);
+            if (!BorrarCarpeta(Carpeta) || Directory.Exists(Carpeta))
+            {
+                return false;
+            }
+
             Inicializar();
             ServicioCatalogos.Recargar();
             Registro.Info("TEMPLATES_RESTORED");
@@ -203,20 +259,248 @@ public static class ServicioPlantillas
         }
     }
 
-    private static void BorrarCarpeta(string ruta)
+    private static bool BorrarCarpeta(string ruta)
     {
         try
         {
+            var raiz = Path.GetFullPath(PreferenciasUi.RutaCarpeta)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            var objetivo = Path.GetFullPath(ruta);
+            if (!objetivo.StartsWith(raiz, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    objetivo.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    raiz.TrimEnd(Path.DirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("La carpeta no pertenece al directorio de datos.");
+            }
+
             if (Directory.Exists(ruta))
             {
-                Directory.Delete(ruta, recursive: true);
+                var atributos = File.GetAttributes(ruta);
+                Directory.Delete(ruta, recursive: (atributos & FileAttributes.ReparsePoint) == 0);
             }
+
+            return true;
         }
         catch (IOException)
         {
+            return false;
         }
         catch (UnauthorizedAccessException)
         {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ValidarPaqueteZip(string ruta)
+    {
+        try
+        {
+            var info = new FileInfo(ruta);
+            if (!info.Exists || info.Length <= 0 ||
+                info.Length > ConfiguracionActualizaciones.TamanoMaximoPlantillas)
+            {
+                return false;
+            }
+
+            using var archivo = ZipFile.OpenRead(ruta);
+            if (!ArchivoComprimidoAcotado(
+                    archivo, MaximoEntradasPaquete, MaximoExtraidoPaquete))
+            {
+                return false;
+            }
+
+            var nombres = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entrada in archivo.Entries)
+            {
+                var nombre = entrada.FullName.Replace('\\', '/');
+                if (nombre.Contains('/') ||
+                    !ArchivosPermitidosPaquete.Contains(nombre) ||
+                    !nombres.Add(nombre))
+                {
+                    return false;
+                }
+            }
+
+            return Obligatorias.All(nombres.Contains);
+        }
+        catch (Exception excepcion) when (excepcion is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ConjuntoValido(string carpeta)
+    {
+        try
+        {
+            if (!Directory.Exists(carpeta))
+            {
+                return false;
+            }
+
+            foreach (var nombre in Obligatorias)
+            {
+                if (!DocxSeguro(Path.Combine(carpeta, nombre)))
+                {
+                    return false;
+                }
+            }
+
+            var catalogos = Path.Combine(carpeta, "catalogos.json");
+            if (File.Exists(catalogos))
+            {
+                var info = new FileInfo(catalogos);
+                if (info.Length <= 0 || info.Length > 1024 * 1024)
+                {
+                    return false;
+                }
+
+                using var json = JsonDocument.Parse(File.ReadAllBytes(catalogos));
+                if (json.RootElement.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch (Exception excepcion) when (excepcion is IOException or UnauthorizedAccessException or
+            System.Security.SecurityException or InvalidDataException or JsonException or
+            XmlException or OpenXmlPackageException)
+        {
+            return false;
+        }
+    }
+
+    private static bool DocxSeguro(string ruta)
+    {
+        var info = new FileInfo(ruta);
+        if (!info.Exists || info.Length <= 0 || info.Length > MaximoArchivoIndividual)
+        {
+            return false;
+        }
+
+        using (var zip = ZipFile.OpenRead(ruta))
+        {
+            if (!ArchivoComprimidoAcotado(zip, MaximoEntradasDocx, MaximoExtraidoDocx))
+            {
+                return false;
+            }
+
+            var nombres = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entrada in zip.Entries)
+            {
+                var nombre = entrada.FullName.Replace('\\', '/');
+                if (!nombres.Add(nombre) ||
+                    nombre.Contains("vbaProject", StringComparison.OrdinalIgnoreCase) ||
+                    nombre.Contains("/activeX/", StringComparison.OrdinalIgnoreCase) ||
+                    nombre.Contains("/embeddings/", StringComparison.OrdinalIgnoreCase) ||
+                    nombre.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                if (nombre.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
+                    !RelacionesExternasPermitidas(entrada))
+                {
+                    return false;
+                }
+            }
+        }
+
+        using var documento = WordprocessingDocument.Open(ruta, isEditable: false);
+        return documento.DocumentType != WordprocessingDocumentType.MacroEnabledDocument &&
+               documento.MainDocumentPart?.Document?.Body is not null;
+    }
+
+    private static bool ArchivoComprimidoAcotado(
+        ZipArchive zip,
+        int maximoEntradas,
+        long maximoExtraido)
+    {
+        if (zip.Entries.Count == 0 || zip.Entries.Count > maximoEntradas)
+        {
+            return false;
+        }
+
+        long total = 0;
+        foreach (var entrada in zip.Entries)
+        {
+            if (entrada.Length < 0 || entrada.Length > MaximoArchivoIndividual)
+            {
+                return false;
+            }
+
+            total = checked(total + entrada.Length);
+            if (total > maximoExtraido ||
+                (entrada.Length > 0 && entrada.CompressedLength <= 0) ||
+                (entrada.CompressedLength > 0 &&
+                 (double)entrada.Length / entrada.CompressedLength > MaximaRelacionCompresion))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool RelacionesExternasPermitidas(ZipArchiveEntry entrada)
+    {
+        using var flujo = entrada.Open();
+        using var lector = XmlReader.Create(flujo, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = 1024 * 1024,
+        });
+        var xml = XDocument.Load(lector, LoadOptions.None);
+
+        foreach (var relacion in xml.Descendants()
+                     .Where(x => string.Equals(
+                         (string?)x.Attribute("TargetMode"), "External", StringComparison.OrdinalIgnoreCase)))
+        {
+            var destino = (string?)relacion.Attribute("Target");
+            if (!Uri.TryCreate(destino, UriKind.Absolute, out var uri) ||
+                uri.Scheme != Uri.UriSchemeHttps ||
+                !string.Equals(uri.Host, "denuncias.servicios.gob.pe", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void IntentarEliminarArchivo(string ruta)
+    {
+        try
+        {
+            var raiz = Path.GetFullPath(ServicioActualizaciones.CarpetaDescargas)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            var objetivo = Path.GetFullPath(ruta);
+            if (!objetivo.StartsWith(raiz, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(Path.GetExtension(objetivo), ".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (File.Exists(objetivo))
+            {
+                File.Delete(objetivo);
+            }
+        }
+        catch (Exception excepcion) when (excepcion is IOException or UnauthorizedAccessException or
+            System.Security.SecurityException or ArgumentException)
+        {
+            Registro.Advertencia("TEMPLATES_PACKAGE_CLEANUP_FAILED");
         }
     }
 }

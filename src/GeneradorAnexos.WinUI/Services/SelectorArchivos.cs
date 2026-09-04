@@ -22,7 +22,7 @@ public static class SelectorArchivos
     {
         var selector = new FileSavePicker
         {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            SuggestedStartLocation = UbicacionSugerida(carpetaInicial),
             SuggestedFileName = System.IO.Path.GetFileNameWithoutExtension(nombreSugerido),
             CommitButtonText = titulo,
         };
@@ -32,6 +32,36 @@ public static class SelectorArchivos
 
         var archivo = await selector.PickSaveFileAsync();
         return archivo?.Path;
+    }
+
+    private static PickerLocationId UbicacionSugerida(string? carpeta)
+    {
+        if (string.IsNullOrWhiteSpace(carpeta))
+        {
+            return PickerLocationId.DocumentsLibrary;
+        }
+
+        var completa = System.IO.Path.GetFullPath(carpeta)
+            .TrimEnd(System.IO.Path.DirectorySeparatorChar);
+
+        bool Es(System.Environment.SpecialFolder especial)
+            => string.Equals(
+                completa,
+                System.Environment.GetFolderPath(especial)
+                    .TrimEnd(System.IO.Path.DirectorySeparatorChar),
+                System.StringComparison.OrdinalIgnoreCase);
+
+        if (Es(System.Environment.SpecialFolder.DesktopDirectory))
+        {
+            return PickerLocationId.Desktop;
+        }
+
+        if (Es(System.Environment.SpecialFolder.MyPictures))
+        {
+            return PickerLocationId.PicturesLibrary;
+        }
+
+        return PickerLocationId.DocumentsLibrary;
     }
 
     /// <summary>Dialogo «Abrir». Devuelve la ruta o <c>null</c> si se cancela.</summary>

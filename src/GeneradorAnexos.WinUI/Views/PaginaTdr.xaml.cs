@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using GeneradorAnexos.Domain.Documents;
 using GeneradorAnexos.Domain.Formatting;
@@ -24,6 +25,7 @@ public sealed partial class PaginaTdr : UserControl
 {
     private readonly PreferenciasUi _preferencias = new();
     private readonly GestorVistasPrevias _vistasPrevias = new("tdr");
+    private static readonly SemaphoreSlim SemaforoGeneracion = new(1, 1);
 
     private readonly TablaObjeto _tablaObjeto = new();
     private readonly TablaEntregables _tablaUnico = new() { Unico = true };
@@ -461,6 +463,23 @@ public sealed partial class PaginaTdr : UserControl
 
     public async Task GenerarAsync()
     {
+        if (!await SemaforoGeneracion.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            await GenerarCoreAsync();
+        }
+        finally
+        {
+            SemaforoGeneracion.Release();
+        }
+    }
+
+    private async Task GenerarCoreAsync()
+    {
         if (!Validar())
         {
             var n = ContarFaltantes();
@@ -525,6 +544,23 @@ public sealed partial class PaginaTdr : UserControl
     }
 
     public async Task VistaPreviaAsync()
+    {
+        if (!await SemaforoGeneracion.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            await VistaPreviaCoreAsync();
+        }
+        finally
+        {
+            SemaforoGeneracion.Release();
+        }
+    }
+
+    private async Task VistaPreviaCoreAsync()
     {
         // La vista previa reproduce el estado parcial tal como está. La
         // exportación final conserva la validación estricta de arriba.

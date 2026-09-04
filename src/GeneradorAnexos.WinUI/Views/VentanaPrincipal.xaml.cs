@@ -99,6 +99,26 @@ public sealed partial class VentanaPrincipal : Window
     private static readonly TimeSpan RetardoComprobacion = TimeSpan.FromSeconds(6);
 
     private readonly DispatcherTimer _temporizadorAutoguardado = new();
+    private static readonly SemaphoreSlim SemaforoNuevoRegistro = new(1, 1);
+
+    /// <summary>
+    /// Vigila si el formulario cambió respecto a lo último guardado. Dos
+    /// segundos es suficiente para que el aviso se sienta inmediato y el coste
+    /// es despreciable: serializar el formulario son unos pocos kilobytes.
+    /// </summary>
+    private readonly DispatcherTimer _temporizadorCambios = new()
+    {
+        Interval = TimeSpan.FromSeconds(2),
+    };
+
+    /// <summary>Huella del formulario tal como quedó en el último guardado.</summary>
+    private string _huellaGuardada = string.Empty;
+
+    /// <summary>True cuando el usuario ya confirmó que quiere cerrar.</summary>
+    private bool _cierreAutorizado;
+    private bool _cierreEnCurso;
+    private bool _huellaInvalida;
+    private bool _borradorRecuperadoPendiente;
 
     /// <summary>
     /// Preferencias visuales de Windows. Se crea de forma perezosa porque en
@@ -114,6 +134,16 @@ public sealed partial class VentanaPrincipal : Window
     };
 
     private DateOnly _fechaDocumento = DateOnly.FromDateTime(DateTime.Now);
+
+    /// <summary>
+    /// Fecha con la que se guardó el registro que está abierto, si la tiene.
+    /// </summary>
+    /// <remarks>
+    /// Es información histórica del registro, no la fecha del documento que se
+    /// va a emitir. Se conserva solo para ofrecer «usar la fecha del registro»
+    /// cuando se está reimprimiendo un documento tal como salió en su día.
+    /// </remarks>
+    private DateOnly? _fechaDelRegistro;
     private int _pestanaActiva;
     private bool _actualizandoNavegacion;
     private WindowProcedure? _windowProcedure;
@@ -168,8 +198,14 @@ public sealed partial class VentanaPrincipal : Window
             RestaurarEtiquetaRegistro();
         };
 
+        _huellaGuardada = HuellaFormulario();
+        _temporizadorCambios.Tick += (_, _) => RefrescarAvisoDeCambios();
+        _temporizadorCambios.Start();
+
+        AppWindow.Closing += AlIntentarCerrar;
+
         _temporizadorAutoguardado.Interval = PeriodoAutoguardado;
-        _temporizadorAutoguardado.Tick += (_, _) => Autoguardar();
+        _temporizadorAutoguardado.Tick += async (_, _) => await AutoguardarAsync();
         _temporizadorAutoguardado.Start();
 
         Closed += AlCerrar;
@@ -178,7 +214,16 @@ public sealed partial class VentanaPrincipal : Window
     /// <summary>Estado compartido TDR ↔ Anexos.</summary>
     public GaSync.EstadoCompartido Estado { get; }
 
-    /// <summary>Fecha documental (automática, no editable por el usuario).</summary>
+    /// <summary>
+    /// Fecha con la que se generan los documentos.
+    /// </summary>
+    /// <remarks>
+    /// De forma predeterminada es la del día. Al cargar un registro guardado se
+    /// restaura la fecha con la que se guardó, que es lo correcto para reimprimir
+    /// un documento tal como se emitió. Pero si lo que se quiere es reutilizar
+    /// ese registro para un trámite nuevo, esa fecha ya no sirve: por eso, cuando
+    /// la fecha no es la de hoy, aparece el enlace «Actualizar a hoy».
+    /// </remarks>
     public DateOnly FechaDocumento
     {
         get => _fechaDocumento;
@@ -186,7 +231,69 @@ public sealed partial class VentanaPrincipal : Window
         {
             _fechaDocumento = value;
             FechaValor.Text = DocumentFormatting.FormatPeruvianDate(value);
+            ActualizarAvisoDeFecha();
         }
+    }
+
+    /// <summary>
+    /// Ofrece cambiar la fecha del documento, en el sentido que corresponda.
+    /// </summary>
+    /// <remarks>
+    /// Al abrir un registro guardado, el documento toma la fecha de hoy, porque
+    /// reutilizar un registro casi siempre significa emitir algo nuevo. El
+    /// enlace ofrece entonces volver a la fecha del registro, que es lo que hace
+    /// falta en el caso menos frecuente: reimprimir un documento tal como se
+    /// emitió.
+    ///
+    /// Si por lo que sea la fecha del documento no es la de hoy, el enlace
+    /// ofrece lo contrario. Un solo control cubre las dos situaciones y solo
+    /// aparece cuando hay algo que ofrecer.
+    /// </remarks>
+    private void ActualizarAvisoDeFecha()
+    {
+        var hoy = DateOnly.FromDateTime(DateTime.Now);
+
+        if (_fechaDocumento != hoy)
+        {
+            BotonFechaHoy.Content = "Usar la fecha de hoy";
+            BotonFechaHoy.Visibility = Visibility.Visible;
+            ToolTipService.SetToolTip(
+                TarjetaFecha,
+                "El documento se generará con esta fecha, que no es la de hoy.");
+            return;
+        }
+
+        if (_fechaDelRegistro is { } original && original != hoy)
+        {
+            BotonFechaHoy.Content =
+                $"Usar la fecha del registro ({original:dd/MM/yyyy})";
+            BotonFechaHoy.Visibility = Visibility.Visible;
+            ToolTipService.SetToolTip(
+                TarjetaFecha,
+                $"El registro se guardó el {original:dd/MM/yyyy}. El documento nuevo "
+                + "llevará la fecha de hoy; use el enlace si necesita reimprimirlo "
+                + "con la fecha original.");
+            return;
+        }
+
+        BotonFechaHoy.Visibility = Visibility.Collapsed;
+        ToolTipService.SetToolTip(TarjetaFecha, "Fecha con la que se generarán los documentos.");
+    }
+
+    /// <summary>Alterna entre la fecha de hoy y la del registro abierto.</summary>
+    private void AlActualizarFechaAHoy(object sender, RoutedEventArgs e)
+    {
+        var hoy = DateOnly.FromDateTime(DateTime.Now);
+
+        if (_fechaDocumento == hoy && _fechaDelRegistro is { } original)
+        {
+            FechaDocumento = original;
+            Registro.Info("DOCUMENT_DATE_SET_RECORD");
+            return;
+        }
+
+        FechaDocumento = hoy;
+        Registro.Info("DOCUMENT_DATE_SET_TODAY");
     }
 
     // ═══════════════════════ Ventana, tema y fondo ═══════════════════════
@@ -575,12 +682,6 @@ public sealed partial class VentanaPrincipal : Window
             return;
         }
 
-        if (ReferenceEquals(args.InvokedItemContainer, ElementoGuardarComo))
-        {
-            _ = PaginaUsuariosVista.GuardarComoAsync();
-            return;
-        }
-
         if (ReferenceEquals(args.InvokedItemContainer, ElementoNuevo))
         {
             _ = NuevoRegistroAsync();
@@ -590,27 +691,86 @@ public sealed partial class VentanaPrincipal : Window
     // ═══════════════════════ Registro de trabajo ═══════════════════════
 
     /// <summary>
-    /// Empieza un registro nuevo: limpia los dos formularios y deja de trabajar
-    /// sobre el registro anterior. A partir de aquí, el primer «Guardar» vuelve
-    /// a pedir un nombre.
+    /// Empieza un registro nuevo: solicita su nombre y, solo después de
+    /// confirmarlo, limpia los formularios y crea el registro activo.
     /// </summary>
     public async Task NuevoRegistroAsync()
     {
-        if (!await ServicioDialogos.PreguntarSiNoAsync(
-                "Nuevo registro",
-                "Se limpiarán los formularios de TDR y de Anexos para empezar " +
-                $"un registro nuevo.{Environment.NewLine}{Environment.NewLine}" +
-                "Los cambios que no haya guardado se perderán. ¿Desea continuar?"))
+        if (!await SemaforoNuevoRegistro.WaitAsync(0))
         {
             return;
         }
 
-        PaginaTdrVista.LimpiarSilencioso();
-        PaginaAnexosVista.LimpiarSilencioso();
-        PaginaUsuariosVista.OlvidarRegistroCargado();
-        FechaDocumento = DateOnly.FromDateTime(DateTime.Now);
-        CambiarPestana(0);
+        try
+        {
+            // Si no hay nada que perder, no se pregunta nada: limpiar un
+            // formulario ya guardado es inocuo y una confirmación de más solo
+            // estorba.
+            if (HayCambiosSinGuardar() && !await ConfirmarDescarteAsync(
+                    "empezar un registro nuevo",
+                    "Guardar y continuar",
+                    "Continuar sin guardar"))
+            {
+                return;
+            }
+
+            await PaginaUsuariosVista.CrearRegistroNuevoAsync(() =>
+            {
+                PaginaTdrVista.LimpiarSilencioso();
+                PaginaAnexosVista.LimpiarSilencioso();
+                FechaDocumento = DateOnly.FromDateTime(DateTime.Now);
+                CambiarPestana(0);
+            });
+        }
+        finally
+        {
+            SemaforoNuevoRegistro.Release();
+        }
     }
+
+    /// <summary>
+    /// Ofrece guardar los cambios pendientes antes de una acción que los
+    /// descartaría.
+    /// </summary>
+    /// <returns><c>true</c> si se puede continuar con la acción.</returns>
+    /// <remarks>
+    /// Si no existe un registro activo, «Guardar» no crea uno implícitamente;
+    /// la acción se detiene y el usuario puede elegir «Nuevo registro».
+    /// </remarks>
+    private async Task<bool> ConfirmarDescarteAsync(
+        string accion,
+        string textoGuardar,
+        string textoDescartar)
+    {
+        var respuesta = await ServicioDialogos.PreguntarCambiosPendientesAsync(
+            PaginaUsuariosVista.NombreRegistroActivo, accion, textoGuardar, textoDescartar);
+
+        switch (respuesta)
+        {
+            case RespuestaCambios.Guardar:
+                if (PaginaUsuariosVista.IdRegistroCargado is null)
+                {
+                    await PaginaUsuariosVista.GuardarComoAsync();
+                }
+                else
+                {
+                    await PaginaUsuariosVista.GuardarActualAsync();
+                }
+                return !HayCambiosSinGuardar();
+
+            case RespuestaCambios.Descartar:
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>Protege cualquier acción que vaya a sustituir el formulario actual.</summary>
+    public Task<bool> ConfirmarCambiosAntesDeAsync(string accion)
+        => HayCambiosSinGuardar()
+            ? ConfirmarDescarteAsync(accion, "Guardar y continuar", "Continuar sin guardar")
+            : Task.FromResult(true);
 
     /// <summary>
     /// Refresca la tarjeta que indica sobre qué registro se está trabajando.
@@ -623,14 +783,14 @@ public sealed partial class VentanaPrincipal : Window
 
         var sinGuardar = string.IsNullOrWhiteSpace(nombre);
 
-        RegistroActivoValor.Text = sinGuardar ? "Registro nuevo" : nombre!;
+        RegistroActivoValor.Text = sinGuardar ? "Sin registro activo" : nombre!;
         RegistroActivoValor.Style = Estilo(
             sinGuardar ? "Ga.FechaValorTenue" : "Ga.FechaValor");
 
         ToolTipService.SetToolTip(
             TarjetaRegistroActivo,
             sinGuardar
-                ? "Todavía no ha guardado este registro. Al pulsar Guardar se le pedirá un nombre."
+                ? "Use «Nuevo registro» para crear un registro y asignarle un nombre."
                 : $"Los cambios se guardarán en «{nombre}».");
     }
 
@@ -642,6 +802,8 @@ public sealed partial class VentanaPrincipal : Window
     public void NotificarGuardado(string nombre)
     {
         ActualizarRegistroActivo(nombre);
+        _borradorRecuperadoPendiente = false;
+        _huellaGuardada = HuellaFormulario();
 
         RegistroActivoEtiqueta.Text = "GUARDADO";
         RegistroActivoEtiqueta.Style = Estilo("Ga.FechaEtiquetaOk");
@@ -707,6 +869,139 @@ public sealed partial class VentanaPrincipal : Window
         {
             PaginaConfiguracionVista.Refrescar();
         }
+    }
+
+    // ═══════════════════════ Cambios sin guardar ═══════════════════════
+
+    /// <summary>
+    /// Huella del contenido actual del formulario.
+    /// </summary>
+    /// <remarks>
+    /// Se compara el borrador serializado en lugar de escuchar el evento de
+    /// cambio de cada campo: son decenas de campos repartidos en dos páginas,
+    /// más tres tablas dinámicas, y bastaría olvidar uno para que el aviso
+    /// mintiera. Comparar el resultado completo no puede equivocarse.
+    /// </remarks>
+    private string HuellaFormulario()
+    {
+        try
+        {
+            var huella = System.Text.Json.JsonSerializer.Serialize(RecolectarBorrador());
+            _huellaInvalida = false;
+            return huella;
+        }
+        catch (Exception excepcion)
+        {
+            Registro.Advertencia("FORM_FINGERPRINT_" + excepcion.GetType().Name);
+            _huellaInvalida = true;
+            return string.Empty;
+        }
+    }
+
+    /// <summary>True si hay cambios que no se han guardado como registro.</summary>
+    public bool HayCambiosSinGuardar()
+    {
+        var actual = HuellaFormulario();
+        return _borradorRecuperadoPendiente || _huellaInvalida ||
+               !string.Equals(actual, _huellaGuardada, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Marca el estado actual como guardado. Lo llama la página de registros
+    /// al guardar o cargar.
+    /// </summary>
+    public void MarcarFormularioComoGuardado()
+    {
+        _borradorRecuperadoPendiente = false;
+        _huellaGuardada = HuellaFormulario();
+        RefrescarAvisoDeCambios();
+    }
+
+    /// <summary>Refleja en la cabecera si quedan cambios pendientes.</summary>
+    private void RefrescarAvisoDeCambios()
+    {
+        if (_temporizadorAvisoGuardado.IsEnabled)
+        {
+            // Se está mostrando «GUARDADO»; no conviene pisarlo.
+            return;
+        }
+
+        RegistroActivoEtiqueta.Text = HayCambiosSinGuardar()
+            ? "REGISTRO ACTIVO · SIN GUARDAR"
+            : "REGISTRO ACTIVO";
+    }
+
+    // ═══════════════════════ Cierre de la ventana ═══════════════════════
+
+    /// <summary>
+    /// Impide cerrar con trabajo sin guardar sin preguntar antes.
+    /// </summary>
+    /// <remarks>
+    /// El autoguardado cada 45 s es una red de emergencia, no un sustituto de
+    /// avisar: recupera el borrador al volver a abrir, pero el usuario que
+    /// cierra la ventana no sabe que su trabajo se salvó.
+    /// </remarks>
+    private void AlIntentarCerrar(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_cierreAutorizado)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+        if (_cierreEnCurso)
+        {
+            return;
+        }
+
+        _ = ResolverCierreAsync();
+    }
+
+    private async Task ResolverCierreAsync()
+    {
+        _cierreEnCurso = true;
+        try
+        {
+            if (HayCambiosSinGuardar() &&
+                !await ConfirmarDescarteAsync("cerrar", "Guardar y cerrar", "Cerrar sin guardar"))
+            {
+                return;
+            }
+
+            await EliminarAutoguardadoAlFinalizarAsync();
+            _cierreAutorizado = true;
+            Close();
+        }
+        finally
+        {
+            if (!_cierreAutorizado)
+            {
+                _cierreEnCurso = false;
+            }
+        }
+    }
+
+    /// <summary>Comprueba cambios y prepara una salida iniciada por el actualizador.</summary>
+    public async Task<bool> PrepararCierreSeguroAsync()
+    {
+        if (HayCambiosSinGuardar() &&
+            !await ConfirmarDescarteAsync(
+                "instalar la actualización", "Guardar e instalar", "Instalar sin guardar"))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Finaliza el cierre solo después de que el instalador firmado haya sido
+    /// lanzado. Si UAC o la verificación fallan, el autoguardado se conserva.
+    /// </summary>
+    public async Task AutorizarCierrePorActualizacionAsync()
+    {
+        await EliminarAutoguardadoAlFinalizarAsync();
+        _cierreAutorizado = true;
     }
 
     // ═══════════════════════ Actualizaciones ═══════════════════════
@@ -836,11 +1131,11 @@ public sealed partial class VentanaPrincipal : Window
     // ═══════════════════════ Autoguardado y cierre ═══════════════════════
 
     /// <summary>El autoguardado nunca debe interrumpir al usuario.</summary>
-    private void Autoguardar()
+    private async Task AutoguardarAsync()
     {
         try
         {
-            PaginaUsuarios.Autoguardar(RecolectarBorrador());
+            await PaginaUsuarios.AutoguardarAsync(RecolectarBorrador());
         }
         catch (Exception excepcion)
         {
@@ -859,22 +1154,37 @@ public sealed partial class VentanaPrincipal : Window
     };
 
     /// <summary>Aplica un borrador completo a las dos páginas de formulario.</summary>
-    public void AplicarBorrador(Domain.Models.BorradorPayloadV1? datos)
+    /// <param name="conservarFecha">
+    /// <c>true</c> al retomar el autoguardado, donde se está continuando el
+    /// mismo trabajo y la fecha debe ser la que había. <c>false</c> al abrir un
+    /// registro guardado: ahí se reutilizan los datos para emitir un documento
+    /// nuevo, así que la fecha pasa a ser la de hoy y la del registro queda
+    /// disponible en el enlace de la cabecera.
+    /// </param>
+    public void AplicarBorrador(
+        Domain.Models.BorradorPayloadV1? datos,
+        bool marcarComoGuardado = true,
+        bool conservarFecha = true)
     {
         if (datos is null)
         {
             return;
         }
 
-        if (DateOnly.TryParseExact(
-                datos.Fecha,
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var fecha))
-        {
-            FechaDocumento = fecha;
-        }
+        var tieneFecha = DateOnly.TryParseExact(
+            datos.Fecha,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var fecha);
+
+        _fechaDelRegistro = tieneFecha ? fecha : null;
+
+        // La fecha histórica del registro no se pisa nunca: vive en el propio
+        // registro. Lo que cambia aquí es solo la fecha del documento a emitir.
+        FechaDocumento = conservarFecha && tieneFecha
+            ? fecha
+            : DateOnly.FromDateTime(DateTime.Now);
 
         PaginaTdrVista.SilenciarSincronizacion(true);
         try
@@ -889,13 +1199,54 @@ public sealed partial class VentanaPrincipal : Window
 
         PaginaTdrVista.AplicarPersonalizado(datos.SincronizacionPersonalizada);
         PaginaAnexosVista.ActualizarResumenFormaPago();
+        if (marcarComoGuardado)
+        {
+            MarcarFormularioComoGuardado();
+        }
+        else
+        {
+            _borradorRecuperadoPendiente = true;
+            RefrescarAvisoDeCambios();
+        }
     }
 
     private void AlCerrar(object sender, WindowEventArgs args)
     {
         _temporizadorAutoguardado.Stop();
+        _temporizadorCambios.Stop();
         PaginaAnexosVista.LimpiarVistasPrevias();
         PaginaTdrVista.LimpiarVistasPrevias();
+
+        AppWindow.Closing -= AlIntentarCerrar;
+        if (_previousWindowProcedure != 0)
+        {
+            try
+            {
+                _ = SetWindowLongPtrW(
+                    _manejador,
+                    WindowLongWindowProcedure,
+                    _previousWindowProcedure);
+            }
+            catch (Exception excepcion)
+            {
+                Registro.Error("MIN_SIZE_HOOK_RESTORE_FAILED", excepcion);
+            }
+
+            _previousWindowProcedure = 0;
+            _windowProcedure = null;
+        }
+    }
+
+    private static async Task EliminarAutoguardadoAlFinalizarAsync()
+    {
+        try
+        {
+            await ServiciosApp.Borradores.DeleteAutosaveAsync(default);
+        }
+        catch (Exception excepcion)
+        {
+            Registro.Error("AUTOSAVE_FINAL_CLEANUP_FAILED", excepcion);
+        }
     }
 
     private enum AccionRapida

@@ -17,6 +17,7 @@ public sealed class GestorVistasPrevias
     private readonly string _directorio;
     private readonly string _tipo;
     private readonly HashSet<string> _creadas = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _candado = new();
 
     public GestorVistasPrevias(string tipo)
     {
@@ -39,16 +40,22 @@ public sealed class GestorVistasPrevias
             throw new InvalidOperationException("PREVIEW_PATH_OUTSIDE_OWNED_DIRECTORY");
         }
 
-        _creadas.Add(ruta);
+        lock (_candado)
+        {
+            _creadas.Add(ruta);
+        }
         return ruta;
     }
 
     /// <summary>Retira solo una ruta que esta instancia registró como propia.</summary>
     public void Descartar(string ruta)
     {
-        if (!_creadas.Contains(ruta))
+        lock (_candado)
         {
-            return;
+            if (!_creadas.Contains(ruta))
+            {
+                return;
+            }
         }
 
         try
@@ -64,7 +71,10 @@ public sealed class GestorVistasPrevias
             Registro.Advertencia("PREVIEW_FILE_CLEANUP_FAILED");
         }
 
-        _creadas.Remove(ruta);
+        lock (_candado)
+        {
+            _creadas.Remove(ruta);
+        }
     }
 
     /// <summary>
@@ -82,7 +92,7 @@ public sealed class GestorVistasPrevias
     {
         try
         {
-            var limite = DateTime.Now.AddDays(-1);
+            var limite = DateTime.Now.AddHours(-1);
 
             foreach (var carpeta in Directory.EnumerateDirectories(
                          Path.GetTempPath(), "GeneradorAnexos-preview-*"))
@@ -91,7 +101,10 @@ public sealed class GestorVistasPrevias
                 {
                     if (Directory.GetLastWriteTime(carpeta) < limite)
                     {
-                        Directory.Delete(carpeta, recursive: true);
+                        var atributos = File.GetAttributes(carpeta);
+                        Directory.Delete(
+                            carpeta,
+                            recursive: (atributos & FileAttributes.ReparsePoint) == 0);
                     }
                 }
                 catch (IOException)
@@ -111,14 +124,26 @@ public sealed class GestorVistasPrevias
     /// <summary>Limpieza best-effort del directorio creado por esta instancia.</summary>
     public void LimpiarTodo()
     {
-        foreach (var ruta in new List<string>(_creadas))
+        List<string> rutas;
+        lock (_candado)
+        {
+            rutas = new List<string>(_creadas);
+        }
+
+        foreach (var ruta in rutas)
         {
             Descartar(ruta);
         }
 
         try
         {
-            Directory.Delete(_directorio, recursive: true);
+            if (Directory.Exists(_directorio))
+            {
+                var atributos = File.GetAttributes(_directorio);
+                Directory.Delete(
+                    _directorio,
+                    recursive: (atributos & FileAttributes.ReparsePoint) == 0);
+            }
         }
         catch (IOException)
         {

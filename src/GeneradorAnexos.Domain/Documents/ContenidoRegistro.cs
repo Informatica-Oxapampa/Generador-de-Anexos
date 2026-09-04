@@ -17,6 +17,20 @@ namespace GeneradorAnexos.Domain.Documents;
 public static class ContenidoRegistro
 {
     /// <summary>True si hay información de Anexo registrada, aunque esté parcial.</summary>
+    /// <remarks>
+    /// Solo se miran los campos <b>exclusivos</b> del Anexo, es decir, los datos
+    /// del proveedor y su propuesta económica.
+    ///
+    /// Quedan fuera a propósito <c>NumeroPedido</c>, <c>DiasPlazo</c> y
+    /// <c>DescripcionServicio</c>: la sincronización los copia automáticamente
+    /// desde el TDR, de modo que un registro que solo tiene TDR los lleva
+    /// rellenos. Incluyéndolos, cualquier registro de TDR aparecía como si
+    /// tuviera Anexo y el botón se habilitaba sin haber ni un dato del
+    /// proveedor.
+    ///
+    /// El criterio real es el que impone el documento: un Anexo no se puede
+    /// emitir sin proveedor.
+    /// </remarks>
     public static bool TieneAnexo(BorradorPayloadV1? datos)
     {
         var anexos = datos?.Anexos;
@@ -29,8 +43,7 @@ public static class ContenidoRegistro
         {
             anexos.NombreProveedor, anexos.Dni, anexos.RucProveedor,
             anexos.DireccionProveedor, anexos.CelularProveedor, anexos.EmailProveedor,
-            anexos.CuentaProveedor, anexos.CciProveedor, anexos.DescripcionServicio,
-            anexos.Monto, anexos.DiasPlazo, anexos.NumeroPedido,
+            anexos.CuentaProveedor, anexos.CciProveedor, anexos.Monto,
         }.Any(TieneTexto);
     }
 

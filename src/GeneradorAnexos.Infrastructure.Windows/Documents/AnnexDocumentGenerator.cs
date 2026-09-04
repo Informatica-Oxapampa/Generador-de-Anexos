@@ -39,9 +39,8 @@ public sealed class AnnexDocumentGenerator
 
         if (celda is null)
         {
-            // La plantilla no tiene el bloque de forma de pago: no es un error
-            // fatal, el resto del documento ya quedó generado.
-            return;
+            throw new DocumentoException(
+                "La plantilla de anexos no contiene el bloque 'FORMA DE PAGO' esperado.");
         }
 
         if (plan.Modo == ConstructorPlanPagos.ModoUnico)

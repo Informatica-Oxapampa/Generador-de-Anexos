@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -37,7 +38,10 @@ public static class ServicioActualizaciones
 
     private static readonly Lazy<HttpClient> Cliente = new(() =>
     {
-        var cliente = new HttpClient { Timeout = EsperaDescarga };
+        var cliente = new HttpClient(new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+        }) { Timeout = EsperaDescarga };
         cliente.DefaultRequestHeaders.UserAgent.ParseAdd(
             $"GeneradorAnexos/{Constantes.AppVersion}");
         return cliente;
@@ -65,12 +69,43 @@ public static class ServicioActualizaciones
     {
         try
         {
+            if (!ConfiguracionActualizaciones.FirmaInstitucionalConfigurada)
+            {
+                Registro.Advertencia("UPDATE_SIGNER_PIN_NOT_CONFIGURED");
+                return ResultadoComprobacion.Fallida(
+                    "Las actualizaciones automáticas están deshabilitadas hasta configurar " +
+                    "la huella del certificado institucional de publicación.");
+            }
+
             using var limite = CancellationTokenSource.CreateLinkedTokenSource(cancelacion);
             limite.CancelAfter(EsperaComprobacion);
 
-            var bytes = await Cliente.Value
-                .GetByteArrayAsync(ConfiguracionActualizaciones.UrlManifiesto, limite.Token)
-                .ConfigureAwait(false);
+            using var respuesta = await EnviarConRedireccionesSegurasAsync(
+                ConfiguracionActualizaciones.UrlManifiesto,
+                HttpCompletionOption.ResponseHeadersRead,
+                limite.Token).ConfigureAwait(false);
+            respuesta.EnsureSuccessStatusCode();
+            var bytes = await LeerConLimiteAsync(
+                respuesta.Content,
+                ConfiguracionActualizaciones.TamanoMaximoManifiesto,
+                limite.Token).ConfigureAwait(false);
+
+            using var respuestaFirma = await EnviarConRedireccionesSegurasAsync(
+                ConfiguracionActualizaciones.UrlFirmaManifiesto,
+                HttpCompletionOption.ResponseHeadersRead,
+                limite.Token).ConfigureAwait(false);
+            respuestaFirma.EnsureSuccessStatusCode();
+            var firma = await LeerConLimiteAsync(
+                respuestaFirma.Content,
+                ConfiguracionActualizaciones.TamanoMaximoFirmaManifiesto,
+                limite.Token).ConfigureAwait(false);
+
+            if (!VerificadorFirmaManifiesto.EsConfiable(bytes, firma))
+            {
+                Registro.Advertencia("UPDATE_MANIFEST_SIGNATURE_REJECTED");
+                return ResultadoComprobacion.Fallida(
+                    "La información de actualización no tiene una firma institucional válida.");
+            }
 
             var manifiesto = JsonSerializer.Deserialize<ManifiestoActualizacion>(bytes);
 
@@ -80,14 +115,19 @@ public static class ServicioActualizaciones
                 return ResultadoComprobacion.Fallida("El archivo de versión llegó vacío.");
             }
 
-            if (manifiesto.Formato > ConfiguracionActualizaciones.FormatoManifiesto)
+            if (!EsManifiestoValido(manifiesto))
             {
-                // El manifiesto es de un formato posterior: esta versión no lo
-                // entiende y no debe adivinar. Se pide actualizar a mano.
-                Registro.Advertencia("UPDATE_MANIFEST_NEWER_FORMAT");
+                Registro.Advertencia("UPDATE_MANIFEST_INVALID");
                 return ResultadoComprobacion.Fallida(
-                    "La versión publicada usa un formato más reciente. "
-                    + "Descárguela manualmente desde la página de versiones.");
+                    "La información publicada no cumple el formato de seguridad esperado.");
+            }
+
+            if (RequiereVersionIntermedia(manifiesto.App!))
+            {
+                Registro.Advertencia("UPDATE_INTERMEDIATE_VERSION_REQUIRED");
+                return ResultadoComprobacion.Fallida(
+                    "La versión publicada requiere instalar primero una versión intermedia. " +
+                    "Solicite a la OTI el instalador firmado correspondiente.");
             }
 
             if (!EsManifiestoReciente(manifiesto))
@@ -96,6 +136,12 @@ public static class ServicioActualizaciones
                     "La información de versión recibida es anterior a la última "
                     + "conocida y se ha descartado.");
             }
+
+            // La firma CMS y la huella fijada ya autentican el manifiesto. Se
+            // registra la versión más alta en este punto para que un tercero
+            // no pueda ocultar después una versión que el equipo ya vio,
+            // aunque el usuario haya decidido instalarla más tarde.
+            RegistrarVersionConfiable(manifiesto.App!);
 
             Registro.Info("UPDATE_CHECK_OK");
             return ResultadoComprobacion.Correcta(manifiesto);
@@ -115,6 +161,11 @@ public static class ServicioActualizaciones
         {
             Registro.Advertencia("UPDATE_MANIFEST_PARSE_FAILED");
             return ResultadoComprobacion.Fallida("El archivo de versión no se pudo interpretar.");
+        }
+        catch (InvalidDataException)
+        {
+            Registro.Advertencia("UPDATE_MANIFEST_TOO_LARGE");
+            return ResultadoComprobacion.Fallida("La información de actualización excede el límite permitido.");
         }
         catch (Exception excepcion)
         {
@@ -158,13 +209,26 @@ public static class ServicioActualizaciones
             return false;
         }
 
-        if (publicada > maxima)
+        return true;
+    }
+
+    private static void RegistrarVersionConfiable(PaqueteActualizacion paquete)
+    {
+        if (!VersionSemantica.TryParse(paquete.Version, out var publicada))
+        {
+            return;
+        }
+
+        var preferencias = new PreferenciasUi();
+        if (!VersionSemantica.TryParse(preferencias.VersionMasAltaVista, out var maxima) || publicada > maxima)
         {
             preferencias.VersionMasAltaVista = publicada.ToString();
         }
-
-        return true;
     }
+
+    private static bool RequiereVersionIntermedia(PaqueteActualizacion paquete)
+        => VersionSemantica.TryParse(paquete.VersionMinima, out var minima) &&
+           VersionInstalada < minima;
 
     /// <summary>
     /// Descarga un paquete y comprueba su integridad.
@@ -176,12 +240,21 @@ public static class ServicioActualizaciones
     public static async Task<string?> DescargarVerificadoAsync(
         PaqueteActualizacion paquete,
         string nombreDestino,
+        long tamanoMaximo,
         IProgress<EstadoDescarga> progreso,
         CancellationToken cancelacion)
     {
         if (!PaqueteActualizacion.EsDescargaPermitida(paquete.Url))
         {
             Registro.Advertencia("UPDATE_URL_REJECTED");
+            return null;
+        }
+
+        if (!paquete.EsValido(out _) || tamanoMaximo <= 0 ||
+            tamanoMaximo > ConfiguracionActualizaciones.TamanoMaximoInstalador ||
+            paquete.Tamano > tamanoMaximo)
+        {
+            Registro.Advertencia("UPDATE_PACKAGE_INVALID");
             return null;
         }
 
@@ -194,13 +267,19 @@ public static class ServicioActualizaciones
 
             progreso.Report(EstadoDescarga.Etapa("Preparando actualización…"));
 
-            using var respuesta = await Cliente.Value
-                .GetAsync(paquete.Url, HttpCompletionOption.ResponseHeadersRead, cancelacion)
-                .ConfigureAwait(false);
+            using var respuesta = await EnviarConRedireccionesSegurasAsync(
+                paquete.Url,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancelacion).ConfigureAwait(false);
 
             respuesta.EnsureSuccessStatusCode();
 
             var total = respuesta.Content.Headers.ContentLength ?? paquete.Tamano;
+            if (total <= 0 || total > tamanoMaximo ||
+                total != paquete.Tamano)
+            {
+                throw new InvalidDataException("El tamaño declarado de la descarga no es válido.");
+            }
 
             await using (var origen = await respuesta.Content
                              .ReadAsStreamAsync(cancelacion).ConfigureAwait(false))
@@ -218,14 +297,20 @@ public static class ServicioActualizaciones
                         .ConfigureAwait(false);
 
                     escrito += leido;
+                    if (escrito > paquete.Tamano ||
+                        escrito > tamanoMaximo)
+                    {
+                        throw new InvalidDataException("La descarga excedió el tamaño permitido.");
+                    }
+
                     progreso.Report(EstadoDescarga.Descargando(
-                        total > 0 ? (double)escrito / total : 0, escrito, total));
+                        Math.Clamp((double)escrito / total, 0, 1), escrito, total));
                 }
             }
 
             progreso.Report(EstadoDescarga.Etapa("Verificando archivo…"));
 
-            if (!await VerificarAsync(destino, paquete, cancelacion).ConfigureAwait(false))
+            if (!await VerificarAsync(destino, paquete, tamanoMaximo, cancelacion).ConfigureAwait(false))
             {
                 Descartar(destino);
                 return null;
@@ -258,17 +343,25 @@ public static class ServicioActualizaciones
             Descartar(destino);
             return null;
         }
+        catch (InvalidDataException excepcion)
+        {
+            Registro.Error("UPDATE_DOWNLOAD_LIMIT_REJECTED", excepcion);
+            Descartar(destino);
+            return null;
+        }
     }
 
     /// <summary>Comprueba tamaño y SHA-256 del archivo descargado.</summary>
     private static async Task<bool> VerificarAsync(
         string ruta,
         PaqueteActualizacion paquete,
+        long tamanoMaximo,
         CancellationToken cancelacion)
     {
         try
         {
-            if (paquete.Tamano > 0 && new FileInfo(ruta).Length != paquete.Tamano)
+            if (paquete.Tamano <= 0 || paquete.Tamano > tamanoMaximo ||
+                new FileInfo(ruta).Length != paquete.Tamano)
             {
                 Registro.Advertencia("UPDATE_SIZE_MISMATCH");
                 return false;
@@ -334,11 +427,23 @@ public static class ServicioActualizaciones
                 return ResultadoInstalacion.Fallo;
             }
 
-            if (!await VerificarAsync(rutaInstalador, paquete, cancelacion).ConfigureAwait(false))
+            if (!await VerificarAsync(
+                    rutaInstalador, paquete,
+                    ConfiguracionActualizaciones.TamanoMaximoInstalador,
+                    cancelacion).ConfigureAwait(false))
             {
                 Registro.Advertencia("UPDATE_INSTALLER_TAMPERED");
                 Descartar(rutaInstalador);
                 return ResultadoInstalacion.Manipulado;
+            }
+
+            if (!await Task.Run(
+                    () => VerificadorAuthenticode.EsConfiable(rutaInstalador), cancelacion)
+                .ConfigureAwait(false))
+            {
+                Registro.Advertencia("UPDATE_AUTHENTICODE_REJECTED");
+                Descartar(rutaInstalador);
+                return ResultadoInstalacion.FirmaNoConfiable;
             }
 
             Process.Start(new ProcessStartInfo
@@ -373,6 +478,112 @@ public static class ServicioActualizaciones
         }
 
         return string.IsNullOrWhiteSpace(nombre) ? "paquete.bin" : nombre;
+    }
+
+    private static bool EsManifiestoValido(ManifiestoActualizacion manifiesto)
+    {
+        if (manifiesto.Formato != ConfiguracionActualizaciones.FormatoManifiesto ||
+            !DateTimeOffset.TryParse(
+                manifiesto.Publicado,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out var publicado) ||
+            publicado > DateTimeOffset.UtcNow.AddDays(1) ||
+            publicado < DateTimeOffset.UtcNow.AddYears(-5) ||
+            string.IsNullOrWhiteSpace(manifiesto.Release) ||
+            manifiesto.Release.Length > 80)
+        {
+            return false;
+        }
+
+        if (manifiesto.App is not { } app || !app.EsValido(out var versionApp))
+        {
+            return false;
+        }
+
+        var releaseApp = string.Equals(
+            manifiesto.Release, $"v{versionApp}", StringComparison.Ordinal);
+        var releasePlantillas = manifiesto.Plantillas is { } paquetePlantillas &&
+            VersionSemantica.TryParse(paquetePlantillas.Version, out var versionPlantillas) &&
+            string.Equals(
+                manifiesto.Release, $"plantillas-{versionPlantillas}", StringComparison.Ordinal);
+        if (!releaseApp && !releasePlantillas)
+        {
+            return false;
+        }
+
+        return manifiesto.Plantillas is null || manifiesto.Plantillas.EsValido(out _);
+    }
+
+    private static async Task<HttpResponseMessage> EnviarConRedireccionesSegurasAsync(
+        string url,
+        HttpCompletionOption opcion,
+        CancellationToken cancelacion)
+    {
+        if (!PaqueteActualizacion.EsDescargaPermitida(url))
+        {
+            throw new HttpRequestException("La dirección inicial no está permitida.");
+        }
+
+        var actual = new Uri(url, UriKind.Absolute);
+        for (var salto = 0; salto <= ConfiguracionActualizaciones.MaximoRedirecciones; salto++)
+        {
+            using var peticion = new HttpRequestMessage(HttpMethod.Get, actual);
+            var respuesta = await Cliente.Value.SendAsync(peticion, opcion, cancelacion)
+                .ConfigureAwait(false);
+
+            if (respuesta.StatusCode is not (HttpStatusCode.Moved or
+                HttpStatusCode.Redirect or
+                HttpStatusCode.RedirectMethod or
+                HttpStatusCode.TemporaryRedirect or
+                HttpStatusCode.PermanentRedirect))
+            {
+                return respuesta;
+            }
+
+            var ubicacion = respuesta.Headers.Location;
+            respuesta.Dispose();
+            if (ubicacion is null)
+            {
+                throw new HttpRequestException("La redirección no indicó destino.");
+            }
+
+            actual = ubicacion.IsAbsoluteUri ? ubicacion : new Uri(actual, ubicacion);
+            if (!PaqueteActualizacion.EsDescargaPermitida(actual.AbsoluteUri))
+            {
+                throw new HttpRequestException("La redirección salió de los dominios permitidos.");
+            }
+        }
+
+        throw new HttpRequestException("Se superó el máximo de redirecciones.");
+    }
+
+    private static async Task<byte[]> LeerConLimiteAsync(
+        HttpContent contenido,
+        long maximo,
+        CancellationToken cancelacion)
+    {
+        var declarado = contenido.Headers.ContentLength;
+        if (declarado.HasValue && declarado.Value > maximo)
+        {
+            throw new InvalidDataException("Contenido demasiado grande.");
+        }
+
+        await using var origen = await contenido.ReadAsStreamAsync(cancelacion).ConfigureAwait(false);
+        using var destino = new MemoryStream();
+        var buffer = new byte[16 * 1024];
+        int leidos;
+        while ((leidos = await origen.ReadAsync(buffer, cancelacion).ConfigureAwait(false)) > 0)
+        {
+            if (destino.Length + leidos > maximo)
+            {
+                throw new InvalidDataException("Contenido demasiado grande.");
+            }
+
+            destino.Write(buffer, 0, leidos);
+        }
+
+        return destino.ToArray();
     }
 
     /// <summary>Borra paquetes de intentos anteriores para no acumular disco.</summary>
@@ -445,6 +656,13 @@ public sealed class ResultadoComprobacion
 
         version = publicada;
 
+        if (VersionSemantica.TryParse(app.VersionMinima, out var minima) &&
+            ServicioActualizaciones.VersionInstalada < minima)
+        {
+            Registro.Advertencia("UPDATE_INTERMEDIATE_VERSION_REQUIRED");
+            return null;
+        }
+
         // Estrictamente mayor: si el equipo ya tiene esa version, no se vuelve
         // a descargar; y nunca se ofrece una anterior a la instalada.
         return publicada > ServicioActualizaciones.VersionInstalada ? app : null;
@@ -463,7 +681,10 @@ public sealed class ResultadoComprobacion
         }
 
         version = publicada;
-        return publicada > instalada ? plantillas : null;
+        return plantillas.Tamano <= ConfiguracionActualizaciones.TamanoMaximoPlantillas &&
+               publicada > instalada
+            ? plantillas
+            : null;
     }
 }
 
@@ -478,6 +699,9 @@ public enum ResultadoInstalacion
 
     /// <summary>El archivo cambió después de verificarse: se descartó.</summary>
     Manipulado,
+
+    /// <summary>La firma no es válida o no pertenece al certificado permitido.</summary>
+    FirmaNoConfiable,
 
     /// <summary>Cualquier otro fallo.</summary>
     Fallo,

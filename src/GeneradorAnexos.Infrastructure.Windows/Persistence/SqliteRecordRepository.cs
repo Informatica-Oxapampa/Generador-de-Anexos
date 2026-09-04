@@ -1,6 +1,9 @@
 using System.Data;
+using System.Globalization;
+using System.Text;
 using GeneradorAnexos.Application.Abstractions.Persistence;
 using GeneradorAnexos.Application.Abstractions.Security;
+using GeneradorAnexos.Domain.Documents;
 using GeneradorAnexos.Domain.Models;
 using GeneradorAnexos.Domain.Serialization;
 using Microsoft.Data.Sqlite;
@@ -18,6 +21,8 @@ namespace GeneradorAnexos.Infrastructure.Windows.Persistence;
 /// </remarks>
 public sealed class SqliteRecordRepository : IRecordRepository
 {
+    private const int LongitudMaximaNombre = 120;
+    private const int TamanoMaximoPayloadBytes = 2 * 1024 * 1024;
     private readonly IDataProtectionService _proteccion;
     private readonly IBackupService _respaldos;
     private readonly string _rutaBase;
@@ -31,10 +36,13 @@ public sealed class SqliteRecordRepository : IRecordRepository
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        var rutaHeredadaCopiada = await MigrarRutaHeredadaAsync(cancellationToken);
         Directory.CreateDirectory(Path.GetDirectoryName(_rutaBase)!);
 
         await using var conexion = Abrir();
         await conexion.OpenAsync(cancellationToken);
+
+        await ConfigurarConexionAsync(conexion, cancellationToken);
 
         await using (var comando = conexion.CreateCommand())
         {
@@ -50,9 +58,29 @@ public sealed class SqliteRecordRepository : IRecordRepository
             await comando.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        if (await MigrarNombresHeredadosAsync(conexion, cancellationToken))
+        var datosHeredadosMigrados = await MigrarRegistrosHeredadosAsync(conexion, cancellationToken);
+        if (datosHeredadosMigrados)
         {
-            await _respaldos.CreateAsync(cancellationToken);
+            await PurgarResiduosMigracionAsync(conexion, cancellationToken);
+        }
+
+        await using (var version = conexion.CreateCommand())
+        {
+            version.CommandText = "PRAGMA user_version = 2;";
+            await version.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var respaldoMigracionCreado = true;
+        if (rutaHeredadaCopiada || datosHeredadosMigrados)
+        {
+            respaldoMigracionCreado = await _respaldos.CreateAsync(cancellationToken);
+        }
+
+        if (rutaHeredadaCopiada && respaldoMigracionCreado)
+        {
+            // Solo se retira el original después de cifrar, compactar y crear
+            // un respaldo íntegro de la nueva ubicación.
+            IntentarEliminarBaseHeredada();
         }
     }
 
@@ -66,12 +94,27 @@ public sealed class SqliteRecordRepository : IRecordRepository
 
         await using var comando = conexion.CreateCommand();
         comando.CommandText =
-            "SELECT id, nombre, creado, actualizado FROM registros ORDER BY actualizado DESC";
+            "SELECT id, nombre, datos, creado, actualizado FROM registros ORDER BY actualizado DESC";
 
         await using var lector = await comando.ExecuteReaderAsync(cancellationToken);
         while (await lector.ReadAsync(cancellationToken))
         {
-            var nombre = Descifrar(lector.GetString(1));
+            var id = lector.GetInt64(0);
+            string nombre;
+            BorradorPayloadV1? contenido = null;
+            var danado = false;
+
+            try
+            {
+                nombre = NormalizarHeredado(Descifrar(lector.GetString(1)), id);
+                contenido = PayloadJson.Deserialize(Descifrar(lector.GetString(2)));
+            }
+            catch (Exception excepcion) when (excepcion is DataProtectionException or
+                PayloadJsonException or FormatException or InvalidOperationException)
+            {
+                nombre = $"Registro dañado #{id}";
+                danado = true;
+            }
 
             // El filtro se aplica en memoria porque el nombre está cifrado en
             // reposo y no puede compararse dentro de la consulta SQL.
@@ -82,10 +125,13 @@ public sealed class SqliteRecordRepository : IRecordRepository
             }
 
             resultados.Add(new SavedRecordSummary(
-                lector.GetInt64(0),
+                id,
                 nombre,
-                DateTime.Parse(lector.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                DateTime.Parse(lector.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind)));
+                ParseDateOrDefault(lector.GetString(3)),
+                ParseDateOrDefault(lector.GetString(4)),
+                !danado && ContenidoRegistro.TieneTdr(contenido),
+                !danado && ContenidoRegistro.TieneAnexo(contenido),
+                danado));
         }
 
         return resultados;
@@ -111,10 +157,10 @@ public sealed class SqliteRecordRepository : IRecordRepository
 
         return new SavedRecord(
             lector.GetInt64(0),
-            Descifrar(lector.GetString(1)),
+            NormalizarHeredado(Descifrar(lector.GetString(1)), lector.GetInt64(0)),
             payload,
-            DateTime.Parse(lector.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind),
-            DateTime.Parse(lector.GetString(4), null, System.Globalization.DateTimeStyles.RoundtripKind));
+            ParseDateOrDefault(lector.GetString(3)),
+            ParseDateOrDefault(lector.GetString(4)));
     }
 
     public async Task<long> InsertAsync(
@@ -132,12 +178,12 @@ public sealed class SqliteRecordRepository : IRecordRepository
             SELECT last_insert_rowid();
             """;
         comando.Parameters.AddWithValue("$nombre", Cifrar(Normalizar(name)));
-        comando.Parameters.AddWithValue("$datos", Cifrar(PayloadJson.Serialize(payload)));
+        comando.Parameters.AddWithValue("$datos", Cifrar(SerializarPayload(payload)));
         comando.Parameters.AddWithValue("$creado", ahora);
         comando.Parameters.AddWithValue("$actualizado", ahora);
 
         var id = (long)(await comando.ExecuteScalarAsync(cancellationToken))!;
-        await _respaldos.CreateAsync(cancellationToken);
+        _ = await _respaldos.CreateAsync(cancellationToken);
         return id;
     }
 
@@ -154,12 +200,13 @@ public sealed class SqliteRecordRepository : IRecordRepository
             WHERE id = $id
             """;
         comando.Parameters.AddWithValue("$nombre", Cifrar(Normalizar(name)));
-        comando.Parameters.AddWithValue("$datos", Cifrar(PayloadJson.Serialize(payload)));
+        comando.Parameters.AddWithValue("$datos", Cifrar(SerializarPayload(payload)));
         comando.Parameters.AddWithValue("$actualizado", DateTime.UtcNow.ToString("O"));
         comando.Parameters.AddWithValue("$id", id);
 
-        await comando.ExecuteNonQueryAsync(cancellationToken);
-        await _respaldos.CreateAsync(cancellationToken);
+        var afectadas = await comando.ExecuteNonQueryAsync(cancellationToken);
+        ExigirUnaFila(afectadas, id);
+        _ = await _respaldos.CreateAsync(cancellationToken);
     }
 
     public async Task RenameAsync(long id, string name, CancellationToken cancellationToken = default)
@@ -174,8 +221,9 @@ public sealed class SqliteRecordRepository : IRecordRepository
         comando.Parameters.AddWithValue("$actualizado", DateTime.UtcNow.ToString("O"));
         comando.Parameters.AddWithValue("$id", id);
 
-        await comando.ExecuteNonQueryAsync(cancellationToken);
-        await _respaldos.CreateAsync(cancellationToken);
+        var afectadas = await comando.ExecuteNonQueryAsync(cancellationToken);
+        ExigirUnaFila(afectadas, id);
+        _ = await _respaldos.CreateAsync(cancellationToken);
     }
 
     public async Task DeleteAsync(long id, CancellationToken cancellationToken = default)
@@ -187,8 +235,9 @@ public sealed class SqliteRecordRepository : IRecordRepository
         comando.CommandText = "DELETE FROM registros WHERE id = $id";
         comando.Parameters.AddWithValue("$id", id);
 
-        await comando.ExecuteNonQueryAsync(cancellationToken);
-        await _respaldos.CreateAsync(cancellationToken);
+        var afectadas = await comando.ExecuteNonQueryAsync(cancellationToken);
+        ExigirUnaFila(afectadas, id);
+        _ = await _respaldos.CreateAsync(cancellationToken);
     }
 
     /// <summary>
@@ -244,9 +293,17 @@ public sealed class SqliteRecordRepository : IRecordRepository
                 continue;
             }
 
-            if (string.Equals(Descifrar(lector.GetString(1)), buscado, StringComparison.OrdinalIgnoreCase))
+            try
             {
-                return id;
+                var candidato = NormalizarHeredado(Descifrar(lector.GetString(1)), id);
+                if (string.Equals(candidato, buscado, StringComparison.OrdinalIgnoreCase))
+                {
+                    return id;
+                }
+            }
+            catch (DataProtectionException)
+            {
+                // Una fila dañada no debe impedir buscar ni guardar las demás.
             }
         }
 
@@ -260,45 +317,83 @@ public sealed class SqliteRecordRepository : IRecordRepository
         DataSource = _rutaBase,
         Mode = SqliteOpenMode.ReadWriteCreate,
         Cache = SqliteCacheMode.Private,
+        DefaultTimeout = 5,
     }.ToString());
 
     private static string Normalizar(string? nombre)
     {
-        var limpio = (nombre ?? string.Empty).Trim();
-        return limpio.Length == 0 ? "Registro sin nombre" : limpio;
+        var limpio = (nombre ?? string.Empty).Trim().Normalize(NormalizationForm.FormC);
+        limpio = limpio.Length == 0 ? "Registro sin nombre" : limpio;
+        if (limpio.Length > LongitudMaximaNombre)
+        {
+            throw new ArgumentException($"El nombre no puede superar {LongitudMaximaNombre} caracteres.", nameof(nombre));
+        }
+
+        if (limpio.Any(caracter =>
+                CharUnicodeInfo.GetUnicodeCategory(caracter) is
+                    UnicodeCategory.Control or
+                    UnicodeCategory.Format or
+                    UnicodeCategory.Surrogate))
+        {
+            throw new ArgumentException("El nombre contiene caracteres de control no permitidos.", nameof(nombre));
+        }
+
+        return limpio;
+    }
+
+    private static string NormalizarHeredado(string? nombre, long id)
+    {
+        var limpio = new string((nombre ?? string.Empty)
+            .Where(caracter =>
+                CharUnicodeInfo.GetUnicodeCategory(caracter) is not (
+                    UnicodeCategory.Control or
+                    UnicodeCategory.Format or
+                    UnicodeCategory.Surrogate))
+            .ToArray())
+            .Trim()
+            .Normalize(NormalizationForm.FormC);
+
+        if (limpio.Length > LongitudMaximaNombre)
+        {
+            limpio = limpio[..LongitudMaximaNombre];
+        }
+
+        return limpio.Length == 0 ? $"Registro migrado #{id}" : limpio;
     }
 
     private string Cifrar(string texto) => _proteccion.Protect(texto);
 
-    /// <summary>Descifra y tolera valores heredados en texto plano.</summary>
+    /// <summary>Descifra únicamente el formato protegido esperado.</summary>
+    /// <remarks>
+    /// Los valores heredados en texto plano se convierten durante
+    /// <see cref="InitializeAsync"/>. A partir de ahí, aceptar texto sin el
+    /// sobre DPAPI permitiría que una modificación externa de la base se
+    /// interpretase como un registro legítimo.
+    /// </remarks>
     private string Descifrar(string valor)
-    {
-        try
-        {
-            return _proteccion.IsProtected(valor) ? _proteccion.Unprotect(valor) : valor;
-        }
-        catch (DataProtectionException)
-        {
-            return valor;
-        }
-    }
+        => _proteccion.IsProtected(valor)
+            ? _proteccion.Unprotect(valor)
+            : throw new DataProtectionException(DataProtectionFailure.InvalidEnvelope);
 
-    /// <summary>Cifra los nombres heredados en una única transacción.</summary>
-    private async Task<bool> MigrarNombresHeredadosAsync(
+    /// <summary>Cifra nombre y contenido heredados en una única transacción.</summary>
+    private async Task<bool> MigrarRegistrosHeredadosAsync(
         SqliteConnection conexion, CancellationToken cancellationToken)
     {
-        var pendientes = new List<(long Id, string Nombre)>();
+        var pendientes = new List<(long Id, string? NombrePlano, string? DatosPlanos)>();
 
         await using (var comando = conexion.CreateCommand())
         {
-            comando.CommandText = "SELECT id, nombre FROM registros";
+            comando.CommandText = "SELECT id, nombre, datos FROM registros";
             await using var lector = await comando.ExecuteReaderAsync(cancellationToken);
             while (await lector.ReadAsync(cancellationToken))
             {
-                var nombre = lector.GetString(1);
-                if (!_proteccion.IsProtected(nombre))
+                var nombreGuardado = lector.GetString(1);
+                var datosGuardados = lector.GetString(2);
+                var nombrePlano = _proteccion.IsProtected(nombreGuardado) ? null : nombreGuardado;
+                var datosPlanos = _proteccion.IsProtected(datosGuardados) ? null : datosGuardados;
+                if (nombrePlano is not null || datosPlanos is not null)
                 {
-                    pendientes.Add((lector.GetInt64(0), nombre));
+                    pendientes.Add((lector.GetInt64(0), nombrePlano, datosPlanos));
                 }
             }
         }
@@ -311,12 +406,24 @@ public sealed class SqliteRecordRepository : IRecordRepository
         await using var transaccion = await conexion.BeginTransactionAsync(cancellationToken);
         try
         {
-            foreach (var (id, nombre) in pendientes)
+            foreach (var (id, nombrePlano, datosPlanos) in pendientes)
             {
                 await using var comando = conexion.CreateCommand();
                 comando.Transaction = (SqliteTransaction)transaccion;
-                comando.CommandText = "UPDATE registros SET nombre = $nombre WHERE id = $id";
-                comando.Parameters.AddWithValue("$nombre", Cifrar(Normalizar(nombre)));
+                comando.CommandText = """
+                    UPDATE registros
+                    SET nombre = COALESCE($nombre, nombre),
+                        datos = COALESCE($datos, datos)
+                    WHERE id = $id
+                    """;
+                comando.Parameters.AddWithValue(
+                    "$nombre",
+                    nombrePlano is null
+                        ? (object)DBNull.Value
+                        : Cifrar(NormalizarHeredado(nombrePlano, id)));
+                comando.Parameters.AddWithValue(
+                    "$datos",
+                    datosPlanos is null ? (object)DBNull.Value : Cifrar(datosPlanos));
                 comando.Parameters.AddWithValue("$id", id);
                 await comando.ExecuteNonQueryAsync(cancellationToken);
             }
@@ -328,6 +435,142 @@ public sealed class SqliteRecordRepository : IRecordRepository
         {
             await transaccion.RollbackAsync(cancellationToken);
             throw;
+        }
+    }
+
+    private static async Task ConfigurarConexionAsync(
+        SqliteConnection conexion,
+        CancellationToken cancellationToken)
+    {
+        await using var comando = conexion.CreateCommand();
+        comando.CommandText = "PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;";
+        await comando.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static DateTime ParseDateOrDefault(string value)
+        => DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var result)
+            ? result
+            : DateTime.UnixEpoch;
+
+    private static string SerializarPayload(BorradorPayloadV1 payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        var json = PayloadJson.Serialize(payload);
+        if (Encoding.UTF8.GetByteCount(json) > TamanoMaximoPayloadBytes)
+        {
+            throw new InvalidDataException("El registro supera el tamaño máximo permitido de 2 MB.");
+        }
+
+        return json;
+    }
+
+    private static void ExigirUnaFila(int afectadas, long id)
+    {
+        if (afectadas != 1)
+        {
+            throw new DBConcurrencyException($"El registro {id} ya no existe o fue modificado.");
+        }
+    }
+
+    private async Task<bool> MigrarRutaHeredadaAsync(CancellationToken cancellationToken)
+    {
+        var heredada = RutasDatos.RutaBaseHeredada();
+        if (File.Exists(_rutaBase) || !File.Exists(heredada))
+        {
+            return false;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(_rutaBase)!);
+        var temporal = _rutaBase + ".migrando-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            await using var origen = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = heredada,
+                Mode = SqliteOpenMode.ReadOnly,
+                Cache = SqliteCacheMode.Private,
+                DefaultTimeout = 5,
+            }.ToString());
+            await using var destino = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = temporal,
+                Mode = SqliteOpenMode.ReadWriteCreate,
+                Cache = SqliteCacheMode.Private,
+                DefaultTimeout = 5,
+            }.ToString());
+
+            await origen.OpenAsync(cancellationToken);
+            await destino.OpenAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            origen.BackupDatabase(destino);
+
+            await using var comprobar = destino.CreateCommand();
+            comprobar.CommandText = "PRAGMA integrity_check;";
+            var resultado = (await comprobar.ExecuteScalarAsync(cancellationToken))?.ToString();
+            if (!string.Equals(resultado, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("La base heredada no superó la comprobación de integridad.");
+            }
+
+            await origen.CloseAsync();
+            await destino.CloseAsync();
+            File.Move(temporal, _rutaBase, overwrite: false);
+            return true;
+        }
+        finally
+        {
+            if (File.Exists(temporal))
+            {
+                File.Delete(temporal);
+            }
+        }
+    }
+
+    /// <summary>
+    /// VACUUM reconstruye el archivo tras cifrar filas heredadas y evita que
+    /// el texto plano permanezca recuperable en páginas libres. El checkpoint
+    /// trunca además el WAL que pudo contener los valores anteriores.
+    /// </summary>
+    private static async Task PurgarResiduosMigracionAsync(
+        SqliteConnection conexion,
+        CancellationToken cancellationToken)
+    {
+        foreach (var sql in new[]
+                 {
+                     "PRAGMA wal_checkpoint(TRUNCATE);",
+                     "VACUUM;",
+                     "PRAGMA wal_checkpoint(TRUNCATE);",
+                 })
+        {
+            await using var comando = conexion.CreateCommand();
+            comando.CommandText = sql;
+            await comando.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    private static void IntentarEliminarBaseHeredada()
+    {
+        try
+        {
+            var heredada = RutasDatos.RutaBaseHeredada();
+            if (File.Exists(heredada))
+            {
+                File.Delete(heredada);
+            }
+
+            foreach (var sufijo in new[] { "-wal", "-shm" })
+            {
+                var auxiliar = heredada + sufijo;
+                if (File.Exists(auxiliar))
+                {
+                    File.Delete(auxiliar);
+                }
+            }
+        }
+        catch (Exception excepcion) when (excepcion is IOException or UnauthorizedAccessException)
+        {
+            // No se arriesga la base nueva si Windows mantiene bloqueado el
+            // archivo heredado; se intentará retirar manualmente con la app cerrada.
         }
     }
 }

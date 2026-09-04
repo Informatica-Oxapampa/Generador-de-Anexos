@@ -6,26 +6,29 @@
 - Conexión a Internet durante la primera compilación.
 - Aproximadamente 1 GB libre para el SDK y las dependencias.
 
-No necesita instalar previamente .NET ni ejecutar el archivo como
-administrador. Si el SDK de .NET 8 no está instalado, `compilar.cmd` descarga
-automáticamente el instalador oficial de Microsoft y lo guarda en:
+Instale previamente el SDK oficial de .NET 8. No basta con tener instalado el
+runtime. En Windows 10 u 11 puede instalarlo mediante Windows Package Manager:
 
-```text
-%LOCALAPPDATA%\GeneradorAnexos\dotnet8
+```bat
+winget install --id Microsoft.DotNet.SDK.8 --exact --source winget
 ```
 
-Esta instalación es privada para su usuario y se reutiliza en las siguientes
-compilaciones. No modifica permanentemente el `PATH` de Windows.
-El archivo `global.json` garantiza que el proyecto use la rama estable de
-.NET 8, aunque el equipo tenga también versiones posteriores.
+Después cierre y vuelva a abrir la consola y compruebe la instalación:
+
+```bat
+dotnet --list-sdks
+```
+
+Debe aparecer una versión que empiece por `8.`. `compilar.cmd` no descarga ni
+ejecuta herramientas automáticamente. El archivo `global.json` mantiene el
+proyecto en la rama estable de .NET 8 aunque el equipo tenga otras versiones.
 
 ## Compilar
 
 Descomprima el ZIP y **haga doble clic en `compilar.cmd`** (está en la raíz del repositorio).
 
-El script busca .NET 8, lo instala automáticamente si falta, descarga las
-dependencias y genera el programa. Al terminar abre sola la carpeta con el
-resultado:
+El script busca .NET 8, restaura las dependencias declaradas y genera el
+programa. Al terminar abre la carpeta con el resultado:
 
 ```
 publicado\GeneradorAnexos.exe
@@ -62,13 +65,12 @@ Los tres tropiezos habituales:
 
 | Mensaje | Causa | Solución |
 |---|---|---|
-| `NO SE PUDO PREPARAR EL SDK` | No se pudo descargar o instalar .NET 8 | Revise Internet, proxy y antivirus; luego ejecute otra vez `compilar.cmd` |
+| `NO SE PUDO PREPARAR EL SDK` | No está instalado el SDK de .NET 8 | Ejecute el comando `winget` indicado arriba, abra otra consola y vuelva a ejecutar el script |
 | `NETSDK1045 ... net8.0-windows` | SDK demasiado antiguo | Instale .NET 8 SDK |
 | `MSB4019 ... Microsoft.WindowsAppSDK` | Falta la carga de trabajo de escritorio | Ábra el instalador de Visual Studio → Modificar → «Desarrollo de escritorio de .NET» |
 
 ## Nota honesta
 
-La descarga automática resuelve únicamente la ausencia del SDK. La compilación
-completa de WinUI 3 debe terminar en Windows. Si después aparece otro error,
-copie el mensaje completo para poder identificar exactamente la dependencia o
-el archivo que falta.
+La compilación completa de WinUI 3 debe ejecutarse en Windows. El flujo de CI
+también compila el proyecto completo en un agente Windows para detectar
+regresiones antes de publicar.

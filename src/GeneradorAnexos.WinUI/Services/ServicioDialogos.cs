@@ -202,6 +202,59 @@ public static class ServicioDialogos
             : null;
     }
 
+    /// <summary>
+    /// Pregunta qué hacer cuando una acción va a descartar cambios sin guardar.
+    /// </summary>
+    /// <remarks>
+    /// La usan tanto el cierre de la ventana como «Nuevo registro»: en ambos
+    /// casos el usuario está a punto de perder trabajo y merece las mismas tres
+    /// salidas, no un simple sí/no que solo permite perderlo o quedarse.
+    ///
+    /// «Cancelar» es el botón predeterminado a propósito: si la acción se
+    /// pulsó por error, Escape e Intro devuelven al trabajo sin perder nada.
+    /// </remarks>
+    public static async Task<RespuestaCambios> PreguntarCambiosPendientesAsync(
+        string nombreRegistro,
+        string accion,
+        string textoGuardar,
+        string textoDescartar)
+    {
+        var raiz = RaizActiva;
+        if (raiz is null)
+        {
+            return RespuestaCambios.Descartar;
+        }
+
+        var detalle = string.IsNullOrWhiteSpace(nombreRegistro)
+            ? "El formulario tiene datos que todavía no se han guardado como registro."
+            : $"El registro «{nombreRegistro}» tiene cambios sin guardar.";
+
+        var dialogo = new ContentDialog
+        {
+            XamlRoot = raiz,
+            RequestedTheme = ServicioTema.TemaEfectivo,
+            Title = "Hay cambios sin guardar",
+            Content = new TextBlock
+            {
+                Text = detalle + Environment.NewLine + Environment.NewLine
+                       + $"¿Desea guardarlos antes de {accion}?",
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 420,
+            },
+            PrimaryButtonText = textoGuardar,
+            SecondaryButtonText = textoDescartar,
+            CloseButtonText = "Cancelar",
+            DefaultButton = ContentDialogButton.Close,
+        };
+
+        return await dialogo.ShowAsync() switch
+        {
+            ContentDialogResult.Primary => RespuestaCambios.Guardar,
+            ContentDialogResult.Secondary => RespuestaCambios.Descartar,
+            _ => RespuestaCambios.Cancelar,
+        };
+    }
+
     /// <summary>Pide un nombre (guardar o renombrar un registro).</summary>
     public static async Task<string?> PedirTextoAsync(
         string titulo, string etiqueta, string valorInicial)
@@ -217,6 +270,7 @@ public static class ServicioDialogos
             Text = valorInicial,
             SelectionStart = 0,
             SelectionLength = valorInicial.Length,
+            MaxLength = 120,
         };
 
         var contenido = new StackPanel { Spacing = 8 };
@@ -256,6 +310,19 @@ public static class ServicioDialogos
             CloseButtonText = boton,
         }.ShowAsync();
     }
+}
+
+/// <summary>Respuesta del usuario ante cambios sin guardar.</summary>
+public enum RespuestaCambios
+{
+    /// <summary>Guardar y después continuar con la acción.</summary>
+    Guardar,
+
+    /// <summary>Continuar descartando los cambios.</summary>
+    Descartar,
+
+    /// <summary>No hacer nada y seguir trabajando.</summary>
+    Cancelar,
 }
 
 /// <summary>Accion elegida en el dialogo de exito.</summary>

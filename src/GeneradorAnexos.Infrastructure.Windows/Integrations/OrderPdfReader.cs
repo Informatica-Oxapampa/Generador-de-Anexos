@@ -15,6 +15,8 @@ namespace GeneradorAnexos.Infrastructure.Windows.Integrations;
 /// </summary>
 public sealed class OrderPdfReader : IOrderPdfReader
 {
+    private const long TamanoMaximoPdf = 20L * 1024 * 1024;
+    private const int MaximoPalabrasPrimeraPagina = 50_000;
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
     private const RegexOptions Options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
     private const string OrderToken = @"[A-ZÁÉÍÓÚÜÑ0-9][A-ZÁÉÍÓÚÜÑ0-9./-]{0,19}";
@@ -40,6 +42,13 @@ public sealed class OrderPdfReader : IOrderPdfReader
                     "No se encontró el archivo del Pedido de Servicio.", pdfPath);
             }
 
+            var info = new FileInfo(pdfPath);
+            if (info.Length <= 0 || info.Length > TamanoMaximoPdf)
+            {
+                throw new InvalidOperationException(
+                    "El PDF está vacío o supera el límite permitido de 20 MB.");
+            }
+
             using var document = PdfDocument.Open(pdfPath);
             if (document.NumberOfPages == 0)
             {
@@ -47,9 +56,20 @@ public sealed class OrderPdfReader : IOrderPdfReader
             }
 
             var page = document.GetPage(1);
+            if (!double.IsFinite(page.Width) || !double.IsFinite(page.Height) ||
+                page.Width <= 0 || page.Height <= 0 || page.Width > 20_000 || page.Height > 20_000)
+            {
+                throw new InvalidOperationException("El PDF declara dimensiones de página no válidas.");
+            }
+
             var words = page.GetWords().Where(w => !string.IsNullOrWhiteSpace(w.Text))
                 .Select(w => new PdfWord(w.Text, w.BoundingBox.Left, w.BoundingBox.Right,
                     w.BoundingBox.Bottom)).ToList();
+            if (words.Count > MaximoPalabrasPrimeraPagina)
+            {
+                throw new InvalidOperationException(
+                    "La primera página del PDF es demasiado compleja para procesarla de forma segura.");
+            }
             cancellationToken.ThrowIfCancellationRequested();
             if (words.Count == 0)
             {

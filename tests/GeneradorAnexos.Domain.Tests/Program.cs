@@ -2,6 +2,7 @@ using GeneradorAnexos.Application.Sync;
 using GeneradorAnexos.Domain.Documents;
 using GeneradorAnexos.Domain.Models;
 using GeneradorAnexos.Domain.Payments;
+using GeneradorAnexos.Domain.Serialization;
 using GeneradorAnexos.Domain.Validation;
 
 var checks = 0;
@@ -36,6 +37,7 @@ void Throws<T>(string name, Action action) where T : Exception
 Equal("DNI 8 dígitos", FieldValidators.IsValidDni("12345678"), true);
 Equal("DNI corto", FieldValidators.IsValidDni("1234567"), false);
 Equal("DNI con letra", FieldValidators.IsValidDni("1234567A"), false);
+Equal("DNI rechaza dígitos Unicode", FieldValidators.IsValidDni("１２３４５６７８"), false);
 
 var ruc = FieldValidators.Ruc10FromDni("12345678");
 Equal("RUC 10 desde DNI tiene 11 dígitos", ruc.Length, 11);
@@ -45,12 +47,29 @@ Equal("RUC prefijo inválido", FieldValidators.IsValidRuc("11123456789"), false)
 
 Equal("CCI 20 dígitos", FieldValidators.IsValidCci(new string('1', 20)), true);
 Equal("CCI corto", FieldValidators.IsValidCci("123"), false);
+Equal("CCI rechaza dígitos Unicode", FieldValidators.IsValidCci("１２３４５６７８９０１２３４５６７８９０"), false);
 Equal("correo válido", FieldValidators.IsValidEmail("oti@munioxapampa.gob.pe"), true);
 Equal("correo inválido", FieldValidators.IsValidEmail("oti@"), false);
+Equal("correo demasiado largo", FieldValidators.IsValidEmail(new string('a', 250) + "@x.pe"), false);
 Equal("celular 9 dígitos", FieldValidators.IsValidPhone("999888777"), true);
+Equal("celular con separador no permitido", FieldValidators.IsValidPhone("999-888-777"), false);
 Equal("clasificador presupuestal", FieldValidators.IsValidClassifier("2.3.2.7.11.99"), true);
+Equal("clasificador con raíz incorrecta", FieldValidators.IsValidClassifier("3.3.2.7.11.99"), false);
+Equal("clasificador con segmentos incompletos", FieldValidators.IsValidClassifier("2.3.2.7.11"), false);
 Equal("entero positivo", FieldValidators.IsPositiveInteger("30"), true);
 Equal("cero no es positivo", FieldValidators.IsPositiveInteger("0"), false);
+Equal("entero Unicode rechazado", FieldValidators.IsPositiveInteger("٣٠"), false);
+
+Throws<PayloadJsonException>("payload con versión futura", () =>
+    PayloadJson.Serialize(new BorradorPayloadV1 { Version = BorradorPayloadV1.VersionActual + 1 }));
+Throws<PayloadJsonException>("payload excesivamente grande", () =>
+    PayloadJson.Serialize(new BorradorPayloadV1
+    {
+        Anexos = new AnexosPayload
+        {
+            DireccionProveedor = new string('x', PayloadJson.MaxJsonBytes),
+        },
+    }));
 
 // ── Etiquetas y porcentajes ──────────────────────────────────────────────
 Equal("plazo numérico", TdrLabels.ExtraerCantidadDias("30"), "30");

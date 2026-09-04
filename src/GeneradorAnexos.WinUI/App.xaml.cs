@@ -68,8 +68,8 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     /// <summary>
     /// Toma el mutex con nombre. Si otra instancia ya lo posee, no arranca.
-    /// Si el mutex falla por otra causa, se permite el arranque: no debe
-    /// impedir el uso del programa.
+    /// Si el mutex falla por otra causa, el arranque se bloquea para evitar
+    /// dos procesos escribiendo simultáneamente la misma base y autoguardado.
     /// </summary>
     private static bool ReclamarInstanciaUnica()
     {
@@ -90,9 +90,10 @@ public partial class App : Microsoft.UI.Xaml.Application
             // La instancia anterior murió sin soltar el mutex. Esta lo hereda.
             return true;
         }
-        catch (Exception)
+        catch (Exception excepcion)
         {
-            return true;
+            Registro.Error("SINGLE_INSTANCE_MUTEX_FAILED", excepcion);
+            return false;
         }
     }
 
@@ -121,13 +122,20 @@ public partial class App : Microsoft.UI.Xaml.Application
         Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         Registro.Error("Error no controlado", e.Exception);
+        try
+        {
+            _ = MessageBoxW(
+                IntPtr.Zero,
+                "Ocurrió un error grave y el programa debe cerrarse para proteger los datos. " +
+                "El borrador de recuperación se conservará. Si el problema persiste, contacte con la OTI.",
+                "Generador de Anexos",
+                MensajeAceptar | IconoInformacion | PrimerPlano);
+        }
+        catch (Exception)
+        {
+            // El proceso igualmente finalizará de forma controlada por WinUI.
+        }
 
-        e.Handled = true;
-        _ = ServicioDialogos.MostrarErrorAsync(
-            "Error inesperado",
-            "Ocurrió un error inesperado y la acción no pudo completarse." + Environment.NewLine +
-            Environment.NewLine +
-            "El detalle quedó registrado para soporte. Si el problema persiste, " +
-            "comuníquese con la OTI.");
+        e.Handled = false;
     }
 }
