@@ -1,0 +1,47 @@
+name: Preparar Release con actualizaciones
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validar:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+  preparar:
+    needs: validar
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Crear borrador con el instalador validado
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import xml.etree.ElementTree as E; print(E.parse("src/GeneradorAnexos.WinUI/GeneradorAnexos.WinUI.csproj").findtext(".//Version"))')
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          tag="v$version"
+          gh run download "$GITHUB_RUN_ID" --name "instalador-pruebas-sin-firma-$GITHUB_SHA" --dir salida
+          test -s "salida/GeneradorAnexos-$version-Setup.exe"
+          python3 scripts/preparar-release.py --repo "$GH_REPO" --salida salida
+          cat > notas.txt <<'NOTAS'
+          Instalación manual para Windows 10/11 x64. Incluye runtimes y plantillas.
+          Instalador sin firma digital. Windows puede mostrar un aviso de editor desconocido.
+          Las pruebas y el empaquetado pasaron CI; compruebe la instalación y los formularios antes de publicar este borrador.
+          Incluye update.json y plantillas para buscar, descargar e instalar desde la aplicación.
+          Publique esta Release como versión estable y Latest para que los equipos la detecten.
+          NOTAS
+          if gh release view "$tag" --json isDraft,targetCommitish > existing.json 2>/dev/null; then
+            jq -e --arg sha "$GITHUB_SHA" '.isDraft == true and .targetCommitish == $sha' existing.json
+            gh release upload "$tag" salida/* --clobber
+          else
+            gh release create "$tag" salida/* --target "$GITHUB_SHA" --title "v$version" --draft --notes-file notas.txt
+          fi
+          gh release view "$tag" --json url,isDraft

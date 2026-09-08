@@ -1,0 +1,180 @@
+<!--
+    App.xaml
+    ────────
+    Diccionario raíz de la aplicación.
+
+    Los estilos de botón, conmutador y campo de texto se declaran aquí y no en
+    Themes/Controles.xaml de forma deliberada: derivan (BasedOn) de los estilos
+    predeterminados de WinUI —AccentButtonStyle, DefaultButtonStyle,
+    DefaultToggleButtonStyle, DefaultTextBoxStyle y DefaultComboBoxStyle— y esas
+    claves solo son visibles con certeza dentro del mismo diccionario en el que
+    se combina XamlControlsResources.
+
+    Derivar de los estilos del sistema, en lugar de sustituir la plantilla,
+    conserva de cada control: animaciones de pulsación, estados de foco por
+    teclado, rectángulo de foco del sistema, comportamiento táctil, soporte de
+    alto contraste y los radios de esquina de Windows 11.
+-->
+<Application
+    x:Class="GeneradorAnexos.WinUI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="using:GeneradorAnexos.WinUI.Converters">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Estilos nativos de WinUI 3: base de todo lo demás. -->
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <!-- Paleta institucional con temas claro/oscuro/alto contraste. -->
+                <ResourceDictionary Source="ms-appx:///Paleta.xaml" />
+                <!-- Tipografía, superficies e icono. -->
+                <ResourceDictionary Source="ms-appx:///Controles.xaml" />
+                <!-- Plantillas de los controles propios. -->
+                <ResourceDictionary Source="ms-appx:///Plantillas.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <conv:TextoAVisibilidad x:Key="Ga.TextoAVisibilidad" />
+            <conv:BooleanoAVisibilidad x:Key="Ga.BoolAVisibilidad" />
+            <conv:BooleanoAVisibilidadInversa x:Key="Ga.BoolAVisibilidadInversa" />
+
+            <!-- ═══════════════════════ Botones ═══════════════════════ -->
+
+            <!-- Acción principal de cada vista. Toma el azul institucional
+                 porque la paleta redefine el acento del sistema. -->
+            <Style x:Key="Ga.BotonPrimario" TargetType="Button"
+                   BasedOn="{StaticResource AccentButtonStyle}">
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="Padding" Value="16,5,16,7" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+
+            <!-- Acciones secundarias: mismo tamaño que el primario para que
+                 todos los botones de una barra compartan línea base. -->
+            <Style x:Key="Ga.BotonSecundario" TargetType="Button"
+                   BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="Padding" Value="16,5,16,7" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="Ga.BotonPrimarioCompacto" TargetType="Button"
+                   BasedOn="{StaticResource Ga.BotonPrimario}">
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Padding" Value="12,4,12,6" />
+                <Setter Property="FontSize" Value="13" />
+            </Style>
+
+            <Style x:Key="Ga.BotonSecundarioCompacto" TargetType="Button"
+                   BasedOn="{StaticResource Ga.BotonSecundario}">
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Padding" Value="12,4,12,6" />
+                <Setter Property="FontSize" Value="13" />
+            </Style>
+
+            <!-- Botón de solo icono: fondo transparente en reposo; los estados
+                 de puntero, pulsación y foco los sigue aportando el sistema. -->
+            <Style x:Key="Ga.BotonIcono" TargetType="Button"
+                   BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="Foreground" Value="{ThemeResource Ga.TextoMedio}" />
+                <Setter Property="MinWidth" Value="34" />
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="Padding" Value="6" />
+            </Style>
+
+            <Style x:Key="Ga.BotonIconoEliminar" TargetType="Button"
+                   BasedOn="{StaticResource Ga.BotonIcono}">
+                <Setter Property="Foreground" Value="{ThemeResource Ga.Error}" />
+            </Style>
+
+            <!-- Segmento del selector de modo de entregables. En estado
+                 marcado, WinUI ya lo pinta con el color de acento. -->
+            <Style x:Key="Ga.BotonModo" TargetType="ToggleButton"
+                   BasedOn="{StaticResource DefaultToggleButtonStyle}">
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="MinHeight" Value="30" />
+                <Setter Property="Padding" Value="16,3,16,5" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Style>
+
+            <!-- ═══════════════════════ Entradas ═══════════════════════ -->
+
+            <Style x:Key="Ga.CajaTexto" TargetType="TextBox"
+                   BasedOn="{StaticResource DefaultTextBoxStyle}">
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+            </Style>
+
+            <!-- Área multilínea: alto mínimo, nunca fijo, para que el texto
+                 grande de Windows no recorte el contenido. -->
+            <Style x:Key="Ga.CajaArea" TargetType="TextBox"
+                   BasedOn="{StaticResource Ga.CajaTexto}">
+                <Setter Property="AcceptsReturn" Value="True" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="MinHeight" Value="96" />
+                <Setter Property="VerticalContentAlignment" Value="Top" />
+                <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            </Style>
+
+            <!-- Entradas dentro de las celdas de tabla. El fondo y el texto
+                 vienen del tema, de modo que una celda nunca se queda blanca
+                 en modo oscuro. -->
+            <Style x:Key="Ga.CeldaEditor" TargetType="TextBox"
+                   BasedOn="{StaticResource Ga.CajaTexto}">
+                <Setter Property="AcceptsReturn" Value="True" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="VerticalContentAlignment" Value="Top" />
+                <Setter Property="Background" Value="{ThemeResource Ga.TablaCelda}" />
+                <Setter Property="Foreground" Value="{ThemeResource Ga.TextoFuerte}" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="0" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Padding" Value="10,8,10,8" />
+            </Style>
+
+            <Style x:Key="Ga.CeldaEditorError" TargetType="TextBox"
+                   BasedOn="{StaticResource Ga.CeldaEditor}">
+                <Setter Property="Background" Value="{ThemeResource Ga.ErrorFondo}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource Ga.Error}" />
+            </Style>
+
+            <Style x:Key="Ga.CeldaCampo" TargetType="TextBox"
+                   BasedOn="{StaticResource Ga.CajaTexto}">
+                <Setter Property="TextAlignment" Value="Center" />
+                <Setter Property="Background" Value="{ThemeResource Ga.TablaCelda}" />
+                <Setter Property="Foreground" Value="{ThemeResource Ga.TextoFuerte}" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="0" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="Ga.CeldaCampoError" TargetType="TextBox"
+                   BasedOn="{StaticResource Ga.CeldaCampo}">
+                <Setter Property="Background" Value="{ThemeResource Ga.ErrorFondo}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource Ga.Error}" />
+            </Style>
+
+            <Style x:Key="Ga.Combo" TargetType="ComboBox"
+                   BasedOn="{StaticResource DefaultComboBoxStyle}">
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+            </Style>
+
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

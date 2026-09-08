@@ -1,0 +1,244 @@
+<!--
+    Themes/Paleta.xaml
+    ──────────────────
+    Sistema de color de la aplicación.
+
+    PRINCIPIO: la aplicación no inventa colores de interfaz. Cada clave Ga.* es
+    un alias de un recurso de tema de WinUI, que a su vez es el color real del
+    tema de Windows. Por eso todo cambia de golpe y de forma correcta entre tema
+    claro, oscuro y alto contraste, sin listas de colores paralelas que se
+    desincronizan.
+
+    La técnica es la misma que usa WinUI en sus propios diccionarios:
+    <StaticResource> dentro de cada ResourceDictionary de tema. Al resolverse
+    dentro del diccionario del tema activo, cada alias apunta al pincel de ese
+    tema.
+
+    Únicas excepciones, con color fijo y justificación:
+      - Ga.Dorado / Ga.DoradoClaro : franja institucional de la MPO. Es
+        identidad gráfica, como el escudo; no es un color de interfaz.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.ThemeDictionaries>
+
+        <!-- ══════════════════════════ TEMA CLARO ══════════════════════════ -->
+        <ResourceDictionary x:Key="Light">
+
+            <!-- Superficies, de atrás hacia delante:
+                 ventana → lienzo de contenido → tarjeta -->
+            <StaticResource x:Key="Ga.Ventana" ResourceKey="SolidBackgroundFillColorBaseBrush" />
+            <StaticResource x:Key="Ga.Fondo" ResourceKey="LayerFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.Panel" ResourceKey="CardBackgroundFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.PanelBorde" ResourceKey="CardStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.BordeSuave" ResourceKey="DividerStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.PanelAlterno" ResourceKey="ControlFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.SubPanel" ResourceKey="ControlFillColorSecondaryBrush" />
+
+            <!-- Texto: la jerarquía de Windows (primario, secundario, terciario) -->
+            <StaticResource x:Key="Ga.Texto" ResourceKey="TextFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.TextoFuerte" ResourceKey="TextFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.TextoMedio" ResourceKey="TextFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.TextoTenue" ResourceKey="TextFillColorTertiaryBrush" />
+            <StaticResource x:Key="Ga.DeshabTexto" ResourceKey="TextFillColorDisabledBrush" />
+            <StaticResource x:Key="Ga.DeshabFondo" ResourceKey="ControlFillColorDisabledBrush" />
+
+            <!-- Campos de entrada -->
+            <StaticResource x:Key="Ga.InputFondo" ResourceKey="ControlFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.InputFondoLectura" ResourceKey="ControlFillColorDisabledBrush" />
+            <StaticResource x:Key="Ga.InputBorde" ResourceKey="ControlStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.InputBordeHover" ResourceKey="ControlStrokeColorSecondaryBrush" />
+
+            <!-- Énfasis: el color de acento configurado en Windows -->
+            <StaticResource x:Key="Ga.Acento" ResourceKey="AccentFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.AcentoHover" ResourceKey="AccentFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.AcentoPresionado" ResourceKey="AccentFillColorTertiaryBrush" />
+            <StaticResource x:Key="Ga.AcentoSuave" ResourceKey="SubtleFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.AcentoBorde" ResourceKey="ControlStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.SobreAcento" ResourceKey="TextOnAccentFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.Institucional" ResourceKey="AccentTextFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.Institucional2" ResourceKey="AccentTextFillColorSecondaryBrush" />
+
+            <!-- Validación: los colores de estado del sistema -->
+            <StaticResource x:Key="Ga.Ok" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.OkFondo" ResourceKey="SystemFillColorSuccessBackgroundBrush" />
+            <StaticResource x:Key="Ga.OkBorde" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.Error" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="Ga.ErrorFondo" ResourceKey="SystemFillColorCriticalBackgroundBrush" />
+            <StaticResource x:Key="Ga.ErrorBorde" ResourceKey="SystemFillColorCriticalBrush" />
+
+            <!-- Destello de sincronización TDR → Anexos -->
+            <StaticResource x:Key="Ga.SyncFondo" ResourceKey="SystemFillColorSuccessBackgroundBrush" />
+            <StaticResource x:Key="Ga.SyncBorde" ResourceKey="SystemFillColorSuccessBrush" />
+
+            <!-- Paneles auxiliares -->
+            <StaticResource x:Key="Ga.RequisitosFondo" ResourceKey="SubtleFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.RequisitosBorde" ResourceKey="CardStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.RequisitoCheck" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.NotaTexto" ResourceKey="TextFillColorSecondaryBrush" />
+
+            <!-- Tablas estilo Word -->
+            <StaticResource x:Key="Ga.TablaLinea" ResourceKey="DividerStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.TablaBorde" ResourceKey="CardStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.TablaCabFondo" ResourceKey="SubtleFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.TablaCabTexto" ResourceKey="TextFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.TablaCelda" ResourceKey="CardBackgroundFillColorDefaultBrush" />
+
+            <!-- Distintivo de pago -->
+            <StaticResource x:Key="Ga.ChipPagoFondo" ResourceKey="SystemFillColorSuccessBackgroundBrush" />
+            <StaticResource x:Key="Ga.ChipPagoTexto" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.ChipPagoBorde" ResourceKey="SystemFillColorSuccessBrush" />
+        </ResourceDictionary>
+
+        <!-- ══════════════════════════ TEMA OSCURO ══════════════════════════ -->
+        <!-- Mismos alias. Cada uno se resuelve contra los pinceles oscuros de
+             WinUI, que son los grises neutros de Windows: sin tinte azul. -->
+        <ResourceDictionary x:Key="Dark">
+
+            <StaticResource x:Key="Ga.Ventana" ResourceKey="SolidBackgroundFillColorBaseBrush" />
+            <StaticResource x:Key="Ga.Fondo" ResourceKey="LayerFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.Panel" ResourceKey="CardBackgroundFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.PanelBorde" ResourceKey="CardStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.BordeSuave" ResourceKey="DividerStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.PanelAlterno" ResourceKey="ControlFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.SubPanel" ResourceKey="ControlFillColorSecondaryBrush" />
+
+            <StaticResource x:Key="Ga.Texto" ResourceKey="TextFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.TextoFuerte" ResourceKey="TextFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.TextoMedio" ResourceKey="TextFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.TextoTenue" ResourceKey="TextFillColorTertiaryBrush" />
+            <StaticResource x:Key="Ga.DeshabTexto" ResourceKey="TextFillColorDisabledBrush" />
+            <StaticResource x:Key="Ga.DeshabFondo" ResourceKey="ControlFillColorDisabledBrush" />
+
+            <StaticResource x:Key="Ga.InputFondo" ResourceKey="ControlFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.InputFondoLectura" ResourceKey="ControlFillColorDisabledBrush" />
+            <StaticResource x:Key="Ga.InputBorde" ResourceKey="ControlStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.InputBordeHover" ResourceKey="ControlStrokeColorSecondaryBrush" />
+
+            <StaticResource x:Key="Ga.Acento" ResourceKey="AccentFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.AcentoHover" ResourceKey="AccentFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.AcentoPresionado" ResourceKey="AccentFillColorTertiaryBrush" />
+            <StaticResource x:Key="Ga.AcentoSuave" ResourceKey="SubtleFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.AcentoBorde" ResourceKey="ControlStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.SobreAcento" ResourceKey="TextOnAccentFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.Institucional" ResourceKey="AccentTextFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.Institucional2" ResourceKey="AccentTextFillColorSecondaryBrush" />
+
+            <StaticResource x:Key="Ga.Ok" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.OkFondo" ResourceKey="SystemFillColorSuccessBackgroundBrush" />
+            <StaticResource x:Key="Ga.OkBorde" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.Error" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="Ga.ErrorFondo" ResourceKey="SystemFillColorCriticalBackgroundBrush" />
+            <StaticResource x:Key="Ga.ErrorBorde" ResourceKey="SystemFillColorCriticalBrush" />
+
+            <StaticResource x:Key="Ga.SyncFondo" ResourceKey="SystemFillColorSuccessBackgroundBrush" />
+            <StaticResource x:Key="Ga.SyncBorde" ResourceKey="SystemFillColorSuccessBrush" />
+
+            <StaticResource x:Key="Ga.RequisitosFondo" ResourceKey="SubtleFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.RequisitosBorde" ResourceKey="CardStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.RequisitoCheck" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.NotaTexto" ResourceKey="TextFillColorSecondaryBrush" />
+
+            <StaticResource x:Key="Ga.TablaLinea" ResourceKey="DividerStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.TablaBorde" ResourceKey="CardStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.TablaCabFondo" ResourceKey="SubtleFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.TablaCabTexto" ResourceKey="TextFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.TablaCelda" ResourceKey="CardBackgroundFillColorDefaultBrush" />
+
+            <StaticResource x:Key="Ga.ChipPagoFondo" ResourceKey="SystemFillColorSuccessBackgroundBrush" />
+            <StaticResource x:Key="Ga.ChipPagoTexto" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.ChipPagoBorde" ResourceKey="SystemFillColorSuccessBrush" />
+        </ResourceDictionary>
+
+        <!-- ═══════════════════════ ALTO CONTRASTE ═══════════════════════ -->
+        <!-- Los mismos alias. WinUI ya mapea estos pinceles a los colores del
+             tema de contraste elegido por el usuario, así que la aplicación
+             respeta la accesibilidad sin ninguna tabla propia. -->
+        <ResourceDictionary x:Key="HighContrast">
+
+            <StaticResource x:Key="Ga.Ventana" ResourceKey="SolidBackgroundFillColorBaseBrush" />
+            <StaticResource x:Key="Ga.Fondo" ResourceKey="LayerFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.Panel" ResourceKey="CardBackgroundFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.PanelBorde" ResourceKey="CardStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.BordeSuave" ResourceKey="DividerStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.PanelAlterno" ResourceKey="ControlFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.SubPanel" ResourceKey="ControlFillColorSecondaryBrush" />
+
+            <StaticResource x:Key="Ga.Texto" ResourceKey="TextFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.TextoFuerte" ResourceKey="TextFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.TextoMedio" ResourceKey="TextFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.TextoTenue" ResourceKey="TextFillColorTertiaryBrush" />
+            <StaticResource x:Key="Ga.DeshabTexto" ResourceKey="TextFillColorDisabledBrush" />
+            <StaticResource x:Key="Ga.DeshabFondo" ResourceKey="ControlFillColorDisabledBrush" />
+
+            <StaticResource x:Key="Ga.InputFondo" ResourceKey="ControlFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.InputFondoLectura" ResourceKey="ControlFillColorDisabledBrush" />
+            <StaticResource x:Key="Ga.InputBorde" ResourceKey="ControlStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.InputBordeHover" ResourceKey="ControlStrokeColorSecondaryBrush" />
+
+            <StaticResource x:Key="Ga.Acento" ResourceKey="AccentFillColorDefaultBrush" />
+            <StaticResource x:Key="Ga.AcentoHover" ResourceKey="AccentFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.AcentoPresionado" ResourceKey="AccentFillColorTertiaryBrush" />
+            <StaticResource x:Key="Ga.AcentoSuave" ResourceKey="SubtleFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.AcentoBorde" ResourceKey="ControlStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.SobreAcento" ResourceKey="TextOnAccentFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.Institucional" ResourceKey="AccentTextFillColorPrimaryBrush" />
+            <StaticResource x:Key="Ga.Institucional2" ResourceKey="AccentTextFillColorSecondaryBrush" />
+
+            <StaticResource x:Key="Ga.Ok" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.OkFondo" ResourceKey="SystemFillColorSuccessBackgroundBrush" />
+            <StaticResource x:Key="Ga.OkBorde" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.Error" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="Ga.ErrorFondo" ResourceKey="SystemFillColorCriticalBackgroundBrush" />
+            <StaticResource x:Key="Ga.ErrorBorde" ResourceKey="SystemFillColorCriticalBrush" />
+
+            <StaticResource x:Key="Ga.SyncFondo" ResourceKey="SystemFillColorSuccessBackgroundBrush" />
+            <StaticResource x:Key="Ga.SyncBorde" ResourceKey="SystemFillColorSuccessBrush" />
+
+            <StaticResource x:Key="Ga.RequisitosFondo" ResourceKey="SubtleFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.RequisitosBorde" ResourceKey="CardStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.RequisitoCheck" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.NotaTexto" ResourceKey="TextFillColorSecondaryBrush" />
+
+            <StaticResource x:Key="Ga.TablaLinea" ResourceKey="DividerStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.TablaBorde" ResourceKey="CardStrokeColorDefaultBrush" />
+            <StaticResource x:Key="Ga.TablaCabFondo" ResourceKey="SubtleFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.TablaCabTexto" ResourceKey="TextFillColorSecondaryBrush" />
+            <StaticResource x:Key="Ga.TablaCelda" ResourceKey="CardBackgroundFillColorDefaultBrush" />
+
+            <StaticResource x:Key="Ga.ChipPagoFondo" ResourceKey="SystemFillColorSuccessBackgroundBrush" />
+            <StaticResource x:Key="Ga.ChipPagoTexto" ResourceKey="SystemFillColorSuccessBrush" />
+            <StaticResource x:Key="Ga.ChipPagoBorde" ResourceKey="SystemFillColorSuccessBrush" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- ═══════════════ Identidad institucional (color fijo) ═══════════════ -->
+    <!-- La franja dorada de la MPO. No es un color de interfaz sino identidad
+         gráfica, igual que el escudo, por lo que no sigue al tema. -->
+    <SolidColorBrush x:Key="Ga.Dorado" Color="#C8A250" />
+    <SolidColorBrush x:Key="Ga.DoradoClaro" Color="#DCC088" />
+
+    <!-- ═══════════════════════ Métricas de interfaz ═══════════════════════ -->
+    <FontFamily x:Key="Ga.FuenteIconos">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <x:Double x:Key="Ga.EspacioXs">4</x:Double>
+    <x:Double x:Key="Ga.EspacioSm">8</x:Double>
+    <x:Double x:Key="Ga.EspacioMd">12</x:Double>
+    <x:Double x:Key="Ga.EspacioLg">16</x:Double>
+    <x:Double x:Key="Ga.EspacioXl">24</x:Double>
+
+    <x:Double x:Key="Ga.PadLateralValor">24</x:Double>
+    <Thickness x:Key="Ga.PadLateral">24,0,24,0</Thickness>
+    <Thickness x:Key="Ga.PadPagina">24,4,24,24</Thickness>
+
+    <CornerRadius x:Key="Ga.RadioTarjeta">8</CornerRadius>
+    <CornerRadius x:Key="Ga.RadioPanel">8</CornerRadius>
+    <CornerRadius x:Key="Ga.RadioTabla">6</CornerRadius>
+    <CornerRadius x:Key="Ga.RadioCampo">4</CornerRadius>
+    <CornerRadius x:Key="Ga.RadioBoton">4</CornerRadius>
+
+    <x:Double x:Key="Ga.AltoControl">34</x:Double>
+
+</ResourceDictionary>

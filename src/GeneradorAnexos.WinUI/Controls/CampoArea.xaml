@@ -1,0 +1,40 @@
+<!--
+    Controls/CampoArea.xaml
+    ───────────────────────
+    Campo de formulario multilínea. Misma estructura que CampoTexto.
+
+    La altura es siempre mínima, nunca fija: el cuadro puede crecer si el
+    usuario tiene configurado un tamaño de texto mayor en Windows, de modo que
+    el contenido no queda recortado.
+-->
+<UserControl
+    x:Class="GeneradorAnexos.WinUI.Controls.CampoArea"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:GeneradorAnexos.WinUI.Controls"
+    HorizontalAlignment="Stretch"
+    HorizontalContentAlignment="Stretch">
+
+    <StackPanel Spacing="6">
+        <TextBlock x:Name="Etiqueta" Style="{StaticResource Ga.EtiquetaCampo}" />
+
+        <TextBox x:Name="Entrada"
+                 Style="{StaticResource Ga.CajaArea}"
+                 TextChanged="AlCambiarTexto" />
+
+        <Grid x:Name="FilaMensaje" ColumnSpacing="6" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <controls:Icono x:Name="IconoOk" Grid.Column="0"
+                            Nombre="check" Tamano="13"
+                            Trazo="{ThemeResource Ga.Ok}"
+                            VerticalAlignment="Top"
+                            Margin="0,2,0,0"
+                            Visibility="Collapsed" />
+            <TextBlock x:Name="Mensaje" Grid.Column="1"
+                       Style="{StaticResource Ga.MensajeAyuda}" />
+        </Grid>
+    </StackPanel>
+</UserControl>

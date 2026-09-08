@@ -1,0 +1,27 @@
+<!--
+    Controls/SelectorModo.xaml
+    ──────────────────────────
+    Control segmentado «Único entregable» / «Múltiples entregables».
+
+    Son dos ToggleButton nativos: en estado marcado, WinUI ya los pinta con el
+    color de acento —que la paleta ha fijado en el azul institucional— y aporta
+    la animación, el foco por teclado y el soporte de alto contraste.
+-->
+<UserControl
+    x:Class="GeneradorAnexos.WinUI.Controls.SelectorModo"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives">
+
+    <StackPanel Orientation="Horizontal" Spacing="4">
+        <primitives:ToggleButton x:Name="BotonUnico"
+                                 Style="{StaticResource Ga.BotonModo}"
+                                 Content="Único entregable"
+                                 IsChecked="True"
+                                 Click="AlElegirUnico" />
+        <primitives:ToggleButton x:Name="BotonMultiple"
+                                 Style="{StaticResource Ga.BotonModo}"
+                                 Content="Múltiples entregables"
+                                 Click="AlElegirMultiple" />
+    </StackPanel>
+</UserControl>

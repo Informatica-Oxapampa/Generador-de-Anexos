@@ -1,0 +1,382 @@
+<!--
+    Themes/Controles.xaml
+    ─────────────────────
+    Tipografía, superficies e icono de la aplicación.
+
+    Este diccionario se combina tanto en App.xaml como en Themes/Generic.xaml
+    (para las plantillas de los controles propios), de modo que aquí no se
+    referencia ningún estilo predeterminado del propio WinUI: los estilos de
+    TextBlock y Border no necesitan plantilla, así que funcionan sin BasedOn.
+    Los estilos que sí derivan de los predeterminados de WinUI (botones y
+    conmutadores) viven en App.xaml, en el mismo diccionario donde se combina
+    XamlControlsResources, que es donde esas claves son visibles con certeza.
+
+    Escala tipográfica del rediseño (alineada con la rampa de Windows):
+        11  rótulo    ·  12  descripción / ayuda  ·  13  etiqueta
+        14  cuerpo    ·  16  título de sección    ·  20  título de página
+    Ningún tamaño es fraccionario: los tamaños enteros evitan el desenfoque y
+    los cortes al aplicar el escalado de pantalla o el texto grande de Windows.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:GeneradorAnexos.WinUI.Controls">
+
+    <!-- ═══════════════════════════ Icono ═══════════════════════════ -->
+    <!-- Los glifos provienen de Segoe Fluent Icons (Windows 11) con respaldo
+         en Segoe MDL2 Assets (Windows 10): misma métrica y mismo grosor que
+         los iconos del propio sistema operativo. -->
+    <Style x:Key="Ga.Icono" TargetType="controls:Icono">
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoMedio}" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:Icono">
+                    <FontIcon x:Name="PartGlifo"
+                              FontFamily="{ThemeResource Ga.FuenteIconos}"
+                              FontSize="{TemplateBinding Tamano}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Estilo implícito: todo Icono sin estilo explícito usa el anterior. -->
+    <Style TargetType="controls:Icono" BasedOn="{StaticResource Ga.Icono}" />
+
+    <!-- Variantes de color. Existen para que el código no tenga que asignar
+         pinceles: un pincel asignado desde código es una foto del tema que
+         había en ese instante y no cambia al alternar claro/oscuro. Un estilo
+         con ThemeResource sí se reevalúa. -->
+    <Style x:Key="Ga.IconoAcento" TargetType="controls:Icono" BasedOn="{StaticResource Ga.Icono}">
+        <Setter Property="Foreground" Value="{ThemeResource Ga.Acento}" />
+    </Style>
+    <Style x:Key="Ga.IconoOk" TargetType="controls:Icono" BasedOn="{StaticResource Ga.Icono}">
+        <Setter Property="Foreground" Value="{ThemeResource Ga.Ok}" />
+    </Style>
+    <Style x:Key="Ga.IconoTenue" TargetType="controls:Icono" BasedOn="{StaticResource Ga.Icono}">
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoTenue}" />
+    </Style>
+
+    <!-- ═════════════════════ Tipografía institucional ═════════════════════ -->
+
+    <!-- Barra de título: nombre y descriptor de la aplicación -->
+    <Style x:Key="Ga.TituloApp" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoFuerte}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="Ga.SubtituloApp" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoTenue}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- Cabecera de página: título grande y descripción de la sección -->
+    <Style x:Key="Ga.TituloPagina" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoFuerte}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="Ga.Intro" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoMedio}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Tarjeta de fecha -->
+    <Style x:Key="Ga.FechaEtiqueta" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CharacterSpacing" Value="70" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoTenue}" />
+    </Style>
+
+    <Style x:Key="Ga.FechaValor" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoFuerte}" />
+    </Style>
+
+    <!-- Variantes de la tarjeta de registro activo (se aplican desde código) -->
+    <Style x:Key="Ga.FechaValorTenue" TargetType="TextBlock" BasedOn="{StaticResource Ga.FechaValor}">
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoTenue}" />
+    </Style>
+    <Style x:Key="Ga.FechaEtiquetaOk" TargetType="TextBlock" BasedOn="{StaticResource Ga.FechaEtiqueta}">
+        <Setter Property="Foreground" Value="{ThemeResource Ga.Ok}" />
+    </Style>
+
+    <!-- Tarjetas de sección -->
+    <Style x:Key="Ga.TituloSeccion" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoFuerte}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="Ga.DescSeccion" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoTenue}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Campos de formulario -->
+    <Style x:Key="Ga.EtiquetaCampo" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoMedio}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="Ga.SubtituloCampo" TargetType="TextBlock" BasedOn="{StaticResource Ga.EtiquetaCampo}" />
+
+    <Style x:Key="Ga.MensajeAyuda" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoTenue}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="Ga.MensajeOk" TargetType="TextBlock" BasedOn="{StaticResource Ga.MensajeAyuda}">
+        <Setter Property="Foreground" Value="{ThemeResource Ga.Ok}" />
+    </Style>
+    <Style x:Key="Ga.MensajeError" TargetType="TextBlock" BasedOn="{StaticResource Ga.MensajeAyuda}">
+        <Setter Property="Foreground" Value="{ThemeResource Ga.Error}" />
+    </Style>
+
+    <!-- Rótulos de panel -->
+    <Style x:Key="Ga.RotuloPanel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CharacterSpacing" Value="70" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.Acento}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="Ga.RotuloTenue" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CharacterSpacing" Value="90" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoTenue}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="Ga.TextoPanel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoMedio}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="Ga.MontoValor" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.Institucional}" />
+    </Style>
+
+    <Style x:Key="Ga.VersionPie" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoTenue}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Registros guardados -->
+    <Style x:Key="Ga.RegistroNombre" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoFuerte}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="Ga.RegistroFecha" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoTenue}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Filas de requisitos incluidos por defecto (se crean desde código) -->
+    <Style x:Key="Ga.TextoRequisito" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.Texto}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Celda no editable de una tabla -->
+    <Style x:Key="Ga.CeldaEtiqueta" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoMedio}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <!-- Nombre del archivo de pedido cargado -->
+    <Style x:Key="Ga.TextoArchivo" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TextoFuerte}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- Cabecera de las tablas estilo Word -->
+    <Style x:Key="Ga.CeldaCabecera" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CharacterSpacing" Value="40" />
+        <Setter Property="Foreground" Value="{ThemeResource Ga.TablaCabTexto}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- ═════════════════════════ Superficies ═════════════════════════ -->
+
+    <!-- Barra de título integrada -->
+    <Style x:Key="Ga.Encabezado" TargetType="Border">
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.PanelBorde}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="MinHeight" Value="48" />
+    </Style>
+
+    <!-- Franja dorada institucional: 2 px, color fijo en los tres temas -->
+    <Style x:Key="Ga.FranjaDorada" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Ga.Dorado}" />
+        <Setter Property="Height" Value="2" />
+    </Style>
+
+    <!-- Placa del escudo institucional -->
+    <Style x:Key="Ga.LogoBadge" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.AcentoSuave}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.AcentoBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+
+    <!-- Tarjeta de la fecha del documento -->
+    <Style x:Key="Ga.TarjetaFecha" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.Panel}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.PanelBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="14,8,16,8" />
+    </Style>
+
+    <!-- Tarjeta genérica -->
+    <Style x:Key="Ga.Tarjeta" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.Panel}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.PanelBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="20,18,20,18" />
+    </Style>
+
+    <!-- Barra de acciones inferior de cada página -->
+    <Style x:Key="Ga.BarraAcciones" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.Panel}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.PanelBorde}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="Padding" Value="24,12,24,12" />
+    </Style>
+
+    <Style x:Key="Ga.Separador" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.BordeSuave}" />
+        <Setter Property="Height" Value="1" />
+    </Style>
+
+    <!-- Panel informativo de acento -->
+    <Style x:Key="Ga.PanelInfo" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.AcentoSuave}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.AcentoBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16,14,16,14" />
+    </Style>
+
+    <Style x:Key="Ga.PanelRequisitos" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.RequisitosFondo}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.RequisitosBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16,14,16,16" />
+    </Style>
+
+    <Style x:Key="Ga.PanelMonto" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.PanelAlterno}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.PanelBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="0,8,8,0" />
+        <Setter Property="Padding" Value="16,12,16,12" />
+    </Style>
+
+    <Style x:Key="Ga.SubPanel" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.SubPanel}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.PanelBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <Style x:Key="Ga.BarraTotal" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.InputFondoLectura}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.PanelBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16,12,16,12" />
+    </Style>
+
+    <Style x:Key="Ga.TarjetaRegistro" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.Panel}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.PanelBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16,12,16,12" />
+    </Style>
+
+    <!-- Marco de las tablas: el fondo hace de rejilla entre celdas -->
+    <Style x:Key="Ga.TablaWord" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.TablaLinea}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.TablaBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="1" />
+    </Style>
+
+    <!-- ══════════════ Tablas construidas desde código ══════════════ -->
+    <!-- Mismo motivo que las variantes de icono: el código aplica un estilo,
+         nunca un pincel, para que las celdas sigan al tema. -->
+    <Style x:Key="Ga.MarcoTabla" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.TablaLinea}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.TablaBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="1" />
+    </Style>
+
+    <Style x:Key="Ga.CeldaCabeceraFondo" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.TablaCabFondo}" />
+        <Setter Property="Padding" Value="10" />
+    </Style>
+
+    <Style x:Key="Ga.CeldaFondo" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.TablaCelda}" />
+        <Setter Property="Padding" Value="10,8,10,8" />
+    </Style>
+
+    <!-- Distintivos -->
+    <Style x:Key="Ga.ChipNumero" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.AcentoSuave}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.AcentoBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="12,4,12,4" />
+    </Style>
+
+    <Style x:Key="Ga.ChipPago" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource Ga.ChipPagoFondo}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource Ga.ChipPagoBorde}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="12,4,12,4" />
+    </Style>
+
+</ResourceDictionary>

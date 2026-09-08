@@ -1,0 +1,22 @@
+{
+  "pedido.pdf": {
+    "numero": "001211",
+    "motivo": "SERVICIO DE DIGITALIZACION Y DIGITACION DE DOCUMENTOS AL PORTAL GOB.PE DE LA MPO",
+    "direccion_solicitante": "OFICINA DE TECNOLOGÍA DE LA INFORMACION",
+    "meta": "0054",
+    "descripcion": "",
+    "clasificador": "2.3.2.7.4.99",
+    "valor": "500.00",
+    "unidad": "SERVICIO"
+  },
+  "pedido2.pdf": {
+    "numero": "001732",
+    "motivo": "SERVICIO DE INSTALACION DE GABINETE Y CABLEADO ESTRUCTURADO DE RED EN LA GERENCIA DE ADMINISTRACION TRIBUTARIA Y Y GERENCIA DE SERVICIOS PUBLICOS DE LA MUNICIPALIDAD PROVINCIAL DE OXAPAMPA",
+    "direccion_solicitante": "OFICINA DE TECNOLOGÍA DE LA INFORMACION",
+    "meta": "0054",
+    "descripcion": "",
+    "clasificador": "2.3.2.7.11.99",
+    "valor": "3000.00",
+    "unidad": "SERVICIO"
+  }
+}

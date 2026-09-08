@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/GeneradorAnexos.WinUI/Services/PreferenciasUi.cs" Link="Production/PreferenciasUi.cs" />
+    <Compile Include="../../src/GeneradorAnexos.WinUI/Services/Actualizaciones/ServicioActualizaciones.cs" Link="Production/ServicioActualizaciones.cs" />
+    <Compile Include="../../src/GeneradorAnexos.WinUI/Services/Actualizaciones/ManifiestoActualizacion.cs" Link="Production/ManifiestoActualizacion.cs" />
+    <Compile Include="../../src/GeneradorAnexos.WinUI/Services/Actualizaciones/ConfiguracionActualizaciones.cs" Link="Production/ConfiguracionActualizaciones.cs" />
+    <Compile Include="../../src/GeneradorAnexos.WinUI/Services/Actualizaciones/VersionSemantica.cs" Link="Production/VersionSemantica.cs" />
+  </ItemGroup>
+</Project>

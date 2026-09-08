@@ -1,0 +1,56 @@
+<!--
+    Controls/FilaDniValidarRuc.xaml
+    ───────────────────────────────
+    Fila DNI · Validar · RUC.
+
+    El botón se alinea con los cuadros de texto mediante una etiqueta vacía que
+    usa exactamente el mismo estilo y la misma separación que las etiquetas de
+    los campos. Así la alineación se mantiene con cualquier tamaño de texto de
+    Windows, sin márgenes calculados a mano que se descuadran al escalar.
+-->
+<UserControl
+    x:Class="GeneradorAnexos.WinUI.Controls.FilaDniValidarRuc"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:GeneradorAnexos.WinUI.Controls"
+    HorizontalAlignment="Stretch"
+    SizeChanged="AlCambiarTamano">
+
+    <Grid x:Name="Rejilla" ColumnSpacing="12" RowSpacing="6">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="ColumnaDni" Width="*" />
+            <ColumnDefinition x:Name="ColumnaBoton" Width="Auto" />
+            <ColumnDefinition x:Name="ColumnaRuc" Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <controls:CampoTexto x:Name="CampoDni"
+                             Grid.Row="0" Grid.Column="0"
+                             Titulo="DNI"
+                             Marcador="8 dígitos"
+                             Icono="id"
+                             MensajeError="El DNI debe tener 8 dígitos." />
+
+        <StackPanel Grid.Row="0" Grid.Column="1"
+                    Spacing="6"
+                    VerticalAlignment="Top">
+            <!-- Espaciador que iguala el alto de la etiqueta de los campos -->
+            <TextBlock Style="{StaticResource Ga.EtiquetaCampo}" Text=" " />
+            <Button x:Name="BotonValidar"
+                    Style="{StaticResource Ga.BotonSecundario}"
+                    Content="Validar"
+                    ToolTipService.ToolTip="Consultar el nombre a partir del DNI"
+                    Click="AlPulsarValidar" />
+        </StackPanel>
+
+        <controls:CampoTexto x:Name="CampoRuc"
+                             Grid.Row="0" Grid.Column="2"
+                             Titulo="RUC"
+                             Marcador="11 dígitos"
+                             Icono="building"
+                             MensajeError="El RUC no es válido (verifique los 11 dígitos)." />
+    </Grid>
+</UserControl>

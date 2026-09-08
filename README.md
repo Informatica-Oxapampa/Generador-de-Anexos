@@ -1,0 +1,1 @@
+Generador de Anexos es una aplicación para Windows que permite elaborar términos de referencia (TDR) y anexos de contratación, guardar registros y generar documentos Word para la Municipalidad Provincial de Oxapampa.
