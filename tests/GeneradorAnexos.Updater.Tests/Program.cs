@@ -24,6 +24,18 @@ var nuevo = await Query(Manifest("1.0.1"));
 Check("consulta sin certificado detecta nueva versión", nuevo.AppPendiente(out _)?.Version == "1.0.1");
 Check("misma versión no reinstala", (await Query(Manifest("1.0.0"))).AppPendiente(out _) is null);
 Check("versión anterior no instala", (await Query(Manifest("0.9.0"))).AppPendiente(out _) is null);
+var soloPlantillas = Manifest("1.0.0");
+soloPlantillas.Release = "plantillas-1.0.1";
+soloPlantillas.Plantillas = new()
+{
+    Version = "1.0.1", Fecha = soloPlantillas.App!.Fecha, Tamano = bytes.Length,
+    Sha256 = Convert.ToHexString(SHA256.HashData(bytes)),
+    Url = ConfiguracionActualizaciones.UrlRepositorio + "/releases/download/plantillas-1.0.1/plantillas-1.0.1.zip"
+};
+var actualizacionPlantillas = await Query(soloPlantillas);
+Check("Release de plantillas aceptada sin cambiar programa", actualizacionPlantillas.Estado == EstadoComprobacion.Correcta && actualizacionPlantillas.AppPendiente(out _) is null);
+Check("plantillas 1.0.1 detectadas desde 1.0.0", actualizacionPlantillas.PlantillasPendientes(new(1,0,0), out _)?.Version == "1.0.1");
+Check("plantillas ya instaladas no se repiten", actualizacionPlantillas.PlantillasPendientes(new(1,0,1), out _) is null);
 var legado = Manifest("1.0.1"); legado.Formato = 1;
 Check("publicación antigua incompatible rechazada", (await Query(legado)).Estado == EstadoComprobacion.Fallida);
 var otro = Manifest("1.0.1"); otro.App!.Url = "https://github.com/otro/repositorio/releases/download/v1.0.1/setup.exe";
