@@ -25,6 +25,16 @@ public sealed class TablaPagos : UserControl
     private readonly TextBlock _totalValor;
     private readonly Border _celdaTotal;
     private int _cantidadEsperada;
+    private int _cambiosAgrupados;
+    public bool MostrarEliminar { get; init; }
+    public event EventHandler<int>? EliminarSolicitado;
+
+    private void AgruparCambios(Action accion)
+    {
+        _cambiosAgrupados++;
+        try { accion(); }
+        finally { _cambiosAgrupados--; ActualizarTotal(); }
+    }
 
     public TablaPagos()
     {
@@ -78,27 +88,30 @@ public sealed class TablaPagos : UserControl
     /// </summary>
     public void EstablecerCantidad(int cantidad)
     {
-        cantidad = Math.Max(0, cantidad);
-        _cantidadEsperada = cantidad;
-        var cambioCantidad = _filas.Count != cantidad;
-
-        while (_filas.Count < cantidad)
+        AgruparCambios(() =>
         {
-            var fila = new FilaPago(ActualizarTotal);
-            fila.EstablecerCondicionDefecto(_filas.Count);
-            _filas.Add(fila);
-        }
+            cantidad = Math.Max(0, cantidad);
+            _cantidadEsperada = cantidad;
+            var cambioCantidad = _filas.Count != cantidad;
 
-        while (_filas.Count > cantidad)
-        {
-            _filas.RemoveAt(_filas.Count - 1);
-        }
+            while (_filas.Count < cantidad)
+            {
+                var fila = new FilaPago(ActualizarTotal);
+                fila.EstablecerCondicionDefecto(_filas.Count);
+                _filas.Add(fila);
+            }
 
-        Reconstruir();
-        if (cambioCantidad)
-        {
-            Distribuir();
-        }
+            while (_filas.Count > cantidad)
+            {
+                _filas.RemoveAt(_filas.Count - 1);
+            }
+
+            Reconstruir();
+            if (cambioCantidad)
+            {
+                Distribuir();
+            }
+        });
     }
 
     /// <summary>
@@ -108,39 +121,45 @@ public sealed class TablaPagos : UserControl
     /// </summary>
     public void Eliminar(int indice)
     {
-        if (indice < 0 || indice >= _filas.Count)
+        AgruparCambios(() =>
         {
-            return;
-        }
-
-        var automaticas = _filas
-            .Select((fila, i) => fila.UsaCondicionDefecto(i))
-            .ToList();
-
-        _filas.RemoveAt(indice);
-        automaticas.RemoveAt(indice);
-
-        for (var i = 0; i < _filas.Count; i++)
-        {
-            if (automaticas[i])
+            if (indice < 0 || indice >= _filas.Count)
             {
-                _filas[i].EstablecerCondicionDefecto(i);
+                return;
             }
-        }
 
-        Reconstruir();
-        Distribuir();
+            var automaticas = _filas
+                .Select((fila, i) => fila.UsaCondicionDefecto(i))
+                .ToList();
+
+            _filas.RemoveAt(indice);
+            automaticas.RemoveAt(indice);
+
+            for (var i = 0; i < _filas.Count; i++)
+            {
+                if (automaticas[i])
+                {
+                    _filas[i].EstablecerCondicionDefecto(i);
+                }
+            }
+
+            Reconstruir();
+            Distribuir();
+        });
     }
 
     public void Distribuir()
     {
-        var valores = TdrLabels.DistribuirPorcentajes(_filas.Count);
-        for (var i = 0; i < _filas.Count; i++)
+        AgruparCambios(() =>
         {
-            _filas[i].Porcentaje = valores[i];
-        }
+            var valores = TdrLabels.DistribuirPorcentajes(_filas.Count);
+            for (var i = 0; i < _filas.Count; i++)
+            {
+                _filas[i].Porcentaje = valores[i];
+            }
 
-        ActualizarTotal();
+            ActualizarTotal();
+        });
     }
 
     /// <summary>
@@ -168,13 +187,19 @@ public sealed class TablaPagos : UserControl
     public void Importar(IReadOnlyList<PagoPayload?>? lista)
     {
         var datos = lista ?? new List<PagoPayload?>();
-        EstablecerCantidad(datos.Count);
-        for (var i = 0; i < _filas.Count; i++)
+        if (datos.Count == _filas.Count && datos.Select((p, i) =>
+            (p?.Condicion ?? string.Empty) == _filas[i].Condicion &&
+            (p?.Porcentaje ?? 0) == _filas[i].Porcentaje).All(igual => igual)) return;
+        AgruparCambios(() =>
         {
-            _filas[i].Cargar(datos[i]);
-        }
+            EstablecerCantidad(datos.Count);
+            for (var i = 0; i < _filas.Count; i++)
+            {
+                _filas[i].Cargar(datos[i]);
+            }
 
-        ActualizarTotal();
+            ActualizarTotal();
+        });
     }
 
     public bool Validar()
@@ -185,8 +210,11 @@ public sealed class TablaPagos : UserControl
 
     public void Limpiar()
     {
-        _filas.Clear();
-        Reconstruir();
+        AgruparCambios(() =>
+        {
+            _filas.Clear();
+            Reconstruir();
+        });
     }
 
     private void Reconstruir()
@@ -210,6 +238,9 @@ public sealed class TablaPagos : UserControl
 
             var fila = _filas[i];
             fila.EstablecerIndice(i);
+            var indice = i;
+            fila.EstablecerEliminar(MostrarEliminar && _filas.Count > 2,
+                () => EliminarSolicitado?.Invoke(this, indice));
 
             Colocar(fila.CeldaEtiqueta, i + 1, 0);
             Colocar(fila.EditorCondicion, i + 1, 1);
@@ -255,7 +286,7 @@ public sealed class TablaPagos : UserControl
         _totalValor.Text = $"{total}%";
         _totalValor.Foreground = (Brush)Microsoft.UI.Xaml.Application.Current.Resources[
             total == 100 ? "Ga.Ok" : "Ga.Error"];
-        TotalCambiado?.Invoke(this, EventArgs.Empty);
+        if (_cambiosAgrupados == 0) TotalCambiado?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Widgets de una fila de la tabla de pagos.</summary>
@@ -263,13 +294,34 @@ public sealed class TablaPagos : UserControl
     {
         private readonly TextBlock _etiqueta = CeldaTabla.Etiqueta();
         private readonly CampoPorcentaje _porcentaje;
+        private readonly Button _eliminar;
+        private Action? _alEliminar;
+
+        public void EstablecerEliminar(bool visible, Action accion)
+        {
+            _eliminar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            _alEliminar = accion;
+        }
 
         public FilaPago(Action alCambiarPorcentaje)
         {
-            CeldaEtiqueta = CeldaTabla.Envolver(_etiqueta);
+            _eliminar = new Button
+            {
+                Content = new Icono { Nombre = "trash", Tamano = 14 },
+                Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["Ga.BotonIconoEliminar"],
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Visibility = Visibility.Collapsed,
+            };
+            ToolTipService.SetToolTip(_eliminar, "Eliminar pago y su entregable asociado");
+            _eliminar.Click += (_, _) => _alEliminar?.Invoke();
+            var etiqueta = new StackPanel { Spacing = 4 };
+            etiqueta.Children.Add(_eliminar);
+            etiqueta.Children.Add(_etiqueta);
+            CeldaEtiqueta = CeldaTabla.Envolver(etiqueta);
             CeldaEtiqueta.MinHeight = CeldaTabla.AltoCelda;
             CeldaEtiqueta.Padding = new Thickness(8, 6, 8, 8);
             EditorCondicion = CeldaTabla.Editor(string.Empty, "Condición del pago…");
+            EditorCondicion.TextChanged += (_, _) => alCambiarPorcentaje();
 
             _porcentaje = new CampoPorcentaje();
             _porcentaje.Cambiado += (_, _) => alCambiarPorcentaje();

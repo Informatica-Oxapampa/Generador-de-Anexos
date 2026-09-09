@@ -42,6 +42,14 @@ public sealed class AnnexDocumentGenerator
                 "La plantilla de anexos no contiene el bloque 'FORMA DE PAGO' esperado.");
         }
 
+        if (plan.Cuotas.Count == 1)
+        {
+            foreach (var tablaAnterior in celda.Elements<Table>().ToList()) tablaAnterior.Remove();
+            DocxTemplateEngine.EscribirCelda(celda, ConstructorPlanPagos.TextoPagoUnicoAnexos);
+            celda.Ancestors<TableRow>().FirstOrDefault()?.TableRowProperties?.RemoveAllChildren<TableRowHeight>();
+            return;
+        }
+
         using var tdr = WordprocessingDocument.Open(RutasPlantillas.Tdr(), false);
         var cuerpoTdr = tdr.MainDocumentPart?.Document?.Body
             ?? throw new DocumentoException("La plantilla TDR no tiene cuerpo válido.");
@@ -50,21 +58,12 @@ public sealed class AnnexDocumentGenerator
         var tabla = (Table)modelo.CloneNode(true);
         TablaFormaPago.Rellenar(tabla, plan);
         TablaFormaPago.AjustarAncho(tabla, celda);
-        if (plan.Modo != ConstructorPlanPagos.ModoMultiple)
-        {
-            // En único entregable, la celda contiene únicamente el cuadro.
-            foreach (var contenido in celda.ChildElements.Where(x => x is not TableCellProperties).ToList())
-                contenido.Remove();
-        }
-        else
-        {
-            // En pagos múltiples se conserva la introducción editable de la plantilla.
-            if (celda.InnerText.Contains("Según los Términos", StringComparison.OrdinalIgnoreCase))
-                DocxTemplateEngine.EscribirCelda(celda, "Pagos Periódicos");
-            foreach (var anterior in celda.Elements<Table>().ToList()) anterior.Remove();
-            if (!celda.Elements<Paragraph>().Any())
-                celda.Append(new Paragraph(new Run(new Text("Pagos Periódicos"))));
-        }
+        // Los pagos múltiples conservan la introducción editable y el cuadro del TDR.
+        if (celda.InnerText.Contains("Según los Términos", StringComparison.OrdinalIgnoreCase))
+            DocxTemplateEngine.EscribirCelda(celda, "Pagos Periódicos");
+        foreach (var anterior in celda.Elements<Table>().ToList()) anterior.Remove();
+        if (!celda.Elements<Paragraph>().Any())
+            celda.Append(new Paragraph(new Run(new Text("Pagos Periódicos"))));
         // Word exige un párrafo final después de una tabla anidada: sin texto ni espaciado.
         celda.Append(tabla, new Paragraph(new ParagraphProperties(
             new SpacingBetweenLines { Before = "0", After = "0", Line = "1", LineRule = LineSpacingRuleValues.Exact })));

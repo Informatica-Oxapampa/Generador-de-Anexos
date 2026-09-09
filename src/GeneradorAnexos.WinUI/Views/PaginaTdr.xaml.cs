@@ -30,7 +30,8 @@ public sealed partial class PaginaTdr : UserControl
     private readonly TablaObjeto _tablaObjeto = new();
     private readonly TablaEntregables _tablaUnico = new() { Unico = true };
     private readonly TablaEntregables _tablaEntregables = new();
-    private readonly TablaPagos _tablaPagos = new();
+    private readonly TablaPagos _tablaPagos = new() { MostrarEliminar = true };
+    private int _edicionPagos;
 
     private VentanaPrincipal? _ventana;
     private GaSync.EstadoCompartido? _estado;
@@ -53,7 +54,8 @@ public sealed partial class PaginaTdr : UserControl
         _tablaUnico.Inicializar();
         _tablaEntregables.Cambio += (_, _) => SincronizarPagos();
         _tablaEntregables.FilaEliminada += (_, indice) => _tablaPagos.Eliminar(indice);
-        _tablaPagos.TotalCambiado += (_, _) => _ventana?.PaginaAnexosVista.ActualizarResumenFormaPago();
+        _tablaPagos.TotalCambiado += (_, _) => NotificarPagos();
+        _tablaPagos.EliminarSolicitado += (_, indice) => EliminarPagoCompartido(indice);
 
         Selector.Cambiado += (_, modo) => AplicarModo(modo);
         AplicarModo(SelectorModo.ModoUnico);
@@ -233,31 +235,69 @@ public sealed partial class PaginaTdr : UserControl
     public void AplicarPersonalizado(IReadOnlyDictionary<string, bool>? datos)
         => _sincronizador?.AplicarPersonalizado(datos);
 
+    private void NotificarPagos()
+    {
+        if (_edicionPagos == 0) _ventana?.PaginaAnexosVista.ActualizarResumenFormaPago();
+    }
+
+    private void EditarPagos(Action accion)
+    {
+        _edicionPagos++;
+        try { accion(); }
+        finally { _edicionPagos--; NotificarPagos(); }
+    }
+
+    public string ModoPago => Selector.Modo;
+    public List<PagoPayload?> ExportarPagos() => _tablaPagos.Exportar();
+
+    public void ActualizarPagosCompartidos(IReadOnlyList<PagoPayload?> pagos)
+        => EditarPagos(() => _tablaPagos.Importar(pagos));
+
+    public void AgregarPagoCompartido()
+        => EditarPagos(() =>
+        {
+            if (Selector.Modo != SelectorModo.ModoMultiple)
+            {
+                Selector.EstablecerModo(SelectorModo.ModoMultiple);
+                SincronizarPagos();
+            }
+            else _tablaEntregables.Agregar();
+        });
+
+    public void UsarPagoUnicoCompartido()
+        => EditarPagos(() => Selector.EstablecerModo(SelectorModo.ModoUnico));
+
+    public void EliminarPagoCompartido(int indice)
+        => EditarPagos(() => _tablaEntregables.EliminarIndice(indice));
+
     // ═══════════════════════ Modos de entregables ═══════════════════════
 
     /// <summary>Equivalente de <c>_aplicar_modo</c>.</summary>
     private void AplicarModo(string modo)
     {
-        var multiple = modo == SelectorModo.ModoMultiple;
-
-        ContenedorUnico.Visibility = multiple ? Visibility.Collapsed : Visibility.Visible;
-        ContenedorMultiple.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
-        PanelPagoUnico.Visibility = multiple ? Visibility.Collapsed : Visibility.Visible;
-        ContenedorPagoMultiple.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
-
-        if (multiple && _tablaEntregables.Cantidad == 0)
+        EditarPagos(() =>
         {
-            _tablaEntregables.Agregar();
-            _tablaEntregables.Agregar();
-        }
+            var multiple = modo == SelectorModo.ModoMultiple;
 
-        _ventana?.PaginaAnexosVista.ActualizarResumenFormaPago();
+            ContenedorUnico.Visibility = multiple ? Visibility.Collapsed : Visibility.Visible;
+            ContenedorMultiple.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
+            PanelPagoUnico.Visibility = multiple ? Visibility.Collapsed : Visibility.Visible;
+            ContenedorPagoMultiple.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
+
+            if (multiple && _tablaEntregables.Cantidad == 0)
+            {
+                _tablaEntregables.Agregar();
+                _tablaEntregables.Agregar();
+            }
+
+            NotificarPagos();
+        });
     }
 
     private void SincronizarPagos()
     {
         _tablaPagos.EstablecerCantidad(_tablaEntregables.Cantidad);
-        _ventana?.PaginaAnexosVista.ActualizarResumenFormaPago();
+        NotificarPagos();
     }
 
     // ═══════════════════════ Importar Pedido SIGA ═══════════════════════
@@ -627,23 +667,26 @@ public sealed partial class PaginaTdr : UserControl
     /// </summary>
     public void LimpiarSilencioso()
     {
-        foreach (var campo in CamposGenerales())
+        EditarPagos(() =>
         {
-            campo.Limpiar();
-        }
+            foreach (var campo in CamposGenerales())
+            {
+                campo.Limpiar();
+            }
 
-        _estado?.EstablecerOficina(CampoOficina.Valor, CampoOficina);
-        EditorFormacion.Limpiar();
-        EditorExperiencia.Limpiar();
-        EditorCapacitaciones.Limpiar();
-        ListaRequisitos.Limpiar();
+            _estado?.EstablecerOficina(CampoOficina.Valor, CampoOficina);
+            EditorFormacion.Limpiar();
+            EditorExperiencia.Limpiar();
+            EditorCapacitaciones.Limpiar();
+            ListaRequisitos.Limpiar();
 
-        _tablaObjeto.Limpiar();
-        _tablaUnico.Limpiar();
-        _tablaEntregables.Limpiar();
-        _tablaPagos.Limpiar();
+            _tablaObjeto.Limpiar();
+            _tablaUnico.Limpiar();
+            _tablaEntregables.Limpiar();
+            _tablaPagos.Limpiar();
 
-        Selector.EstablecerModo(SelectorModo.ModoUnico);
+            Selector.EstablecerModo(SelectorModo.ModoUnico);
+        });
     }
 
     public void LimpiarVistasPrevias() => _vistasPrevias.LimpiarTodo();
@@ -679,50 +722,53 @@ public sealed partial class PaginaTdr : UserControl
 
     public void ImportarEstado(TdrPayload? datos)
     {
-        datos ??= new TdrPayload();
-        var generales = datos.Generales ?? new CamposGeneralesTdrPayload();
-
-        CampoOficina.EstablecerValorSilencioso(generales.Oficina);
-        _estado?.EstablecerOficina(CampoOficina.Valor, CampoOficina);
-        CampoPedido.EstablecerValorSilencioso(generales.NumeroPedido);
-        CampoActividad.EstablecerValorSilencioso(generales.ActividadPoi);
-        CampoFuente.EstablecerValorSilencioso(generales.FuenteFinanciamiento);
-        CampoMeta.EstablecerValorSilencioso(generales.Meta);
-        CampoClasificador.EstablecerValorSilencioso(generales.Clasificador);
-        CampoDenominacion.EstablecerValorSilencioso(generales.DenominacionServicio);
-        CampoObjetivo.EstablecerValorSilencioso(generales.ObjetivoContratacion);
-        CampoFinalidad.EstablecerValorSilencioso(generales.DescripcionFinalidadPublica);
-        CampoActividades.EstablecerValorSilencioso(generales.ActividadesDesarrollar);
-        CampoDias.EstablecerValorSilencioso(generales.DiasPlazo);
-
-        _tablaObjeto.Importar(datos.Objeto);
-
-        if (datos.Unico is not null)
+        EditarPagos(() =>
         {
-            _tablaUnico.Importar(new[] { datos.Unico });
-        }
+            datos ??= new TdrPayload();
+            var generales = datos.Generales ?? new CamposGeneralesTdrPayload();
 
-        _tablaEntregables.Importar(datos.Entregables);
-        if (datos.Pagos is { Count: > 0 })
-        {
-            // Se conserva exactamente lo guardado. Un plan incompleto se
-            // muestra como tal y no habilita Generar; nunca se repara ni se
-            // termina guardando de manera silenciosa.
-            _tablaPagos.Importar(datos.Pagos);
-        }
-        else
-        {
-            _tablaPagos.Importar(Array.Empty<PagoPayload?>());
-        }
+            CampoOficina.EstablecerValorSilencioso(generales.Oficina);
+            _estado?.EstablecerOficina(CampoOficina.Valor, CampoOficina);
+            CampoPedido.EstablecerValorSilencioso(generales.NumeroPedido);
+            CampoActividad.EstablecerValorSilencioso(generales.ActividadPoi);
+            CampoFuente.EstablecerValorSilencioso(generales.FuenteFinanciamiento);
+            CampoMeta.EstablecerValorSilencioso(generales.Meta);
+            CampoClasificador.EstablecerValorSilencioso(generales.Clasificador);
+            CampoDenominacion.EstablecerValorSilencioso(generales.DenominacionServicio);
+            CampoObjetivo.EstablecerValorSilencioso(generales.ObjetivoContratacion);
+            CampoFinalidad.EstablecerValorSilencioso(generales.DescripcionFinalidadPublica);
+            CampoActividades.EstablecerValorSilencioso(generales.ActividadesDesarrollar);
+            CampoDias.EstablecerValorSilencioso(generales.DiasPlazo);
 
-        _tablaPagos.EstablecerCantidadEsperada(_tablaEntregables.Cantidad);
+            _tablaObjeto.Importar(datos.Objeto);
 
-        ListaRequisitos.Cargar(datos.Requisitos?.Where(v => v is not null).Select(v => v!));
-        EditorFormacion.Cargar(datos.Formacion?.Where(v => v is not null).Select(v => v!));
-        EditorExperiencia.Cargar(datos.Experiencia?.Where(v => v is not null).Select(v => v!));
-        EditorCapacitaciones.Cargar(datos.Capacitaciones?.Where(v => v is not null).Select(v => v!));
+            if (datos.Unico is not null)
+            {
+                _tablaUnico.Importar(new[] { datos.Unico });
+            }
 
-        Selector.EstablecerModo(datos.Modo);
+            _tablaEntregables.Importar(datos.Entregables);
+            if (datos.Pagos is { Count: > 0 })
+            {
+                // Se conserva exactamente lo guardado. Un plan incompleto se
+                // muestra como tal y no habilita Generar; nunca se repara ni se
+                // termina guardando de manera silenciosa.
+                _tablaPagos.Importar(datos.Pagos);
+            }
+            else
+            {
+                _tablaPagos.Importar(Array.Empty<PagoPayload?>());
+            }
+
+            _tablaPagos.EstablecerCantidadEsperada(_tablaEntregables.Cantidad);
+
+            ListaRequisitos.Cargar(datos.Requisitos?.Where(v => v is not null).Select(v => v!));
+            EditorFormacion.Cargar(datos.Formacion?.Where(v => v is not null).Select(v => v!));
+            EditorExperiencia.Cargar(datos.Experiencia?.Where(v => v is not null).Select(v => v!));
+            EditorCapacitaciones.Cargar(datos.Capacitaciones?.Where(v => v is not null).Select(v => v!));
+
+            Selector.EstablecerModo(datos.Modo);
+        });
     }
 
     /// <summary>

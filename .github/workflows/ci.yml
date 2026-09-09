@@ -47,6 +47,9 @@ jobs:
       - name: Integración de datos, documentos y actualizaciones
         run: dotnet run --project tests/GeneradorAnexos.Integration.Tests -c Release
 
+      - name: Edición y sincronización de pagos
+        run: dotnet run --project tests/GeneradorAnexos.PaymentEditor.Tests -c Release
+
       - name: Actualización sin certificado y validaciones de descarga
         run: dotnet run --project tests/GeneradorAnexos.Updater.Tests -c Release
 

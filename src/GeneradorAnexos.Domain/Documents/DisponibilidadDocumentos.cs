@@ -71,7 +71,8 @@ public static class DisponibilidadDocumentos
             "Plazo de entrega: ingrese un número de días mayor que cero.");
         Exigir(errores, DocumentFormatting.TryParseAmount(anexos?.Monto, out var monto) && monto > 0,
             "Monto: ingrese un importe mayor que cero.");
-        Plan(errores, datos?.Tdr, anexos?.Monto);
+        try { _ = ConstructorPlanPagos.ConstruirParaAnexos(datos?.Tdr, anexos?.Monto); }
+        catch (PlanPagosException ex) { errores.Add("Forma de pago: " + ex.Message); }
         return errores;
     }
 

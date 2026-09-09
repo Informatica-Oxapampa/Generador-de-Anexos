@@ -159,13 +159,23 @@
                             </Border>
                         </Grid>
 
-                        <!-- Resumen de la forma de pago tomada del TDR -->
+                        <!-- Editor de pagos compartido con el TDR -->
                         <Border Style="{StaticResource Ga.PanelInfo}">
                             <StackPanel Spacing="4">
-                                <TextBlock Text="FORMA DE PAGO · TOMADA DEL TDR"
+                                <TextBlock Text="FORMA DE PAGO"
                                            Style="{StaticResource Ga.RotuloPanel}" />
                                 <TextBlock x:Name="ResumenFormaPago"
                                            Style="{StaticResource Ga.TextoPanel}" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,8">
+                                    <Button x:Name="BotonAgregarPago" Content="Agregar múltiples pagos"
+                                            Style="{StaticResource Ga.BotonSecundarioCompacto}"
+                                            Click="AlAgregarPago" />
+                                    <Button x:Name="BotonPagoUnico" Content="Pago Único"
+                                            Style="{StaticResource Ga.BotonSecundarioCompacto}"
+                                            Visibility="Collapsed" Click="AlPagoUnico" />
+                                </StackPanel>
+                                <ContentControl x:Name="ContenedorPagos" Visibility="Collapsed"
+                                                HorizontalContentAlignment="Stretch" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

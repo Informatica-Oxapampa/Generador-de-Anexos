@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/GeneradorAnexos.Domain/GeneradorAnexos.Domain.csproj" />
+    <Compile Include="../../src/GeneradorAnexos.WinUI/Controls/TablaPagos.cs" Link="TablaPagos.cs" />
+    <Compile Include="../../src/GeneradorAnexos.WinUI/Controls/TablaEntregables.cs" Link="TablaEntregables.cs" />
+  </ItemGroup>
+</Project>

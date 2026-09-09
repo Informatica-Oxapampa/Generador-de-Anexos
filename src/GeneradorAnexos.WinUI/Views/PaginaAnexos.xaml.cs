@@ -30,12 +30,26 @@ public sealed partial class PaginaAnexos : UserControl
     private VentanaPrincipal? _ventana;
     private GaSync.EstadoCompartido? _estado;
     private bool _consultandoDni;
+    private bool _sincronizandoPagos;
+    private readonly TablaPagos _tablaPagos = new() { MostrarEliminar = true };
 
     public PaginaAnexos()
     {
         InitializeComponent();
         EtiquetaVersion.Text = $"v{Constantes.AppVersion}";
         ConfigurarCampos();
+        ContenedorPagos.Content = _tablaPagos;
+        _tablaPagos.TotalCambiado += (_, _) =>
+        {
+            if (_sincronizandoPagos || _ventana is null ||
+                _ventana.PaginaTdrVista.ModoPago != SelectorModo.ModoMultiple) return;
+            _sincronizandoPagos = true;
+            try { _ventana.PaginaTdrVista.ActualizarPagosCompartidos(_tablaPagos.Exportar()); }
+            finally { _sincronizandoPagos = false; }
+            ActualizarResumenFormaPago();
+        };
+        _tablaPagos.EliminarSolicitado += (_, indice) =>
+            _ventana?.PaginaTdrVista.EliminarPagoCompartido(indice);
     }
 
     /// <summary>Inyecta la ventana y el estado compartido tras construir el árbol.</summary>
@@ -100,7 +114,7 @@ public sealed partial class PaginaAnexos : UserControl
         CampoDias.UsarTecladoNumerico();
         CampoDias.Caja.TextAlignment = TextAlignment.Center;
 
-        ResumenFormaPago.Text = ConstructorPlanPagos.TextoFormaPagoUnico;
+        ResumenFormaPago.Text = ConstructorPlanPagos.TextoPagoUnicoAnexos;
     }
 
     private static bool SoloDigitos(string texto, int maximo)
@@ -252,15 +266,32 @@ public sealed partial class PaginaAnexos : UserControl
         ActualizarResumenFormaPago();
     }
 
-    /// <summary>
-    /// Recalcula el resumen desde el TDR. Nunca se guarda una copia del plan en
-    /// Anexos: el TDR es la única fuente de verdad.
-    /// </summary>
+    private void AlAgregarPago(object sender, RoutedEventArgs e)
+        => _ventana?.PaginaTdrVista.AgregarPagoCompartido();
+
+    private void AlPagoUnico(object sender, RoutedEventArgs e)
+        => _ventana?.PaginaTdrVista.UsarPagoUnicoCompartido();
+
+    /// <summary>Refleja el plan compartido sin reconstruir el editor que está usando el usuario.</summary>
     public void ActualizarResumenFormaPago()
     {
         if (_ventana is null)
         {
             return;
+        }
+
+        if (!_sincronizandoPagos)
+        {
+            _sincronizandoPagos = true;
+            try
+            {
+                var multiple = _ventana.PaginaTdrVista.ModoPago == SelectorModo.ModoMultiple;
+                ContenedorPagos.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
+                BotonPagoUnico.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
+                BotonAgregarPago.Content = multiple ? "Agregar pago" : "Agregar múltiples pagos";
+                _tablaPagos.Importar(_ventana.PaginaTdrVista.ExportarPagos());
+            }
+            finally { _sincronizandoPagos = false; }
         }
 
         try
@@ -271,7 +302,7 @@ public sealed partial class PaginaAnexos : UserControl
             if (plan.Modo == ConstructorPlanPagos.ModoUnico)
             {
                 ResumenFormaPago.Text =
-                    $"Único pago · 100 %. {ConstructorPlanPagos.TextoFormaPagoUnico}";
+                    ConstructorPlanPagos.TextoPagoUnicoAnexos;
                 return;
             }
 
@@ -284,14 +315,14 @@ public sealed partial class PaginaAnexos : UserControl
             });
 
             ResumenFormaPago.Text =
-                $"{plan.Cuotas.Count} entregables y pagos sincronizados desde el TDR. " +
+                $"{plan.Cuotas.Count} pagos compartidos con el TDR. " +
                 string.Join("  |  ", cuotas);
         }
         catch (PlanPagosException excepcion)
         {
             ResumenFormaPago.Style = (Style)Microsoft.UI.Xaml.Application.Current.Resources["Ga.MensajeError"];
             ResumenFormaPago.Text =
-                "Plan pendiente de corrección en TDR › Entregables / Forma de Pago. " +
+                "Revise las condiciones y porcentajes de los pagos. " +
                 excepcion.Message;
         }
     }
@@ -299,7 +330,7 @@ public sealed partial class PaginaAnexos : UserControl
     private PlanPagos PlanActual()
     {
         var monto = CampoMonto.Valor;
-        return ConstructorPlanPagos.Construir(
+        return ConstructorPlanPagos.ConstruirParaAnexos(
             _ventana!.PaginaTdrVista.ExportarEstado(),
             string.IsNullOrWhiteSpace(monto) ? null : monto);
     }
@@ -318,9 +349,9 @@ public sealed partial class PaginaAnexos : UserControl
             ActualizarResumenFormaPago();
             await ServicioDialogos.MostrarAdvertenciaAsync(
                 "Forma de pago incompleta",
-                $"No se puede generar un Anexo contradictorio con el TDR.{Environment.NewLine}{Environment.NewLine}" +
+                $"Los pagos registrados necesitan una corrección.{Environment.NewLine}{Environment.NewLine}" +
                 $"{excepcion.Message}{Environment.NewLine}{Environment.NewLine}" +
-                "Corrija Entregables y Forma de Pago en la pestaña TDR.");
+                "Corrija las condiciones y porcentajes en Forma de Pago de esta pestaña.");
             return null;
         }
     }
@@ -508,9 +539,13 @@ public sealed partial class PaginaAnexos : UserControl
     {
         // La vista previa admite un formulario parcial. Solo Generar aplica la
         // validación obligatoria y el plan estricto.
-        var plan = ConstructorPlanPagos.ConstruirVistaPrevia(
-            _ventana!.PaginaTdrVista.ExportarEstado(),
-            CampoMonto.Valor);
+        PlanPagos plan;
+        try { plan = PlanActual(); }
+        catch (PlanPagosException)
+        {
+            plan = ConstructorPlanPagos.ConstruirVistaPrevia(
+                _ventana!.PaginaTdrVista.ExportarEstado(), CampoMonto.Valor);
+        }
 
         var ruta = _vistasPrevias.CrearRuta();
         try

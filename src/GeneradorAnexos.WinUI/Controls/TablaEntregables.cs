@@ -141,6 +141,11 @@ public sealed class TablaEntregables : UserControl
         Reconstruir();
     }
 
+    public void EliminarIndice(int indice)
+    {
+        if (indice >= 0 && indice < _filas.Count) Eliminar(_filas[indice]);
+    }
+
     private void Eliminar(FilaEntregable fila)
     {
         if (Unico || _filas.Count <= 2)
@@ -214,6 +219,7 @@ public sealed class TablaEntregables : UserControl
     {
         private readonly TextBlock _etiqueta = CeldaTabla.Etiqueta();
         private readonly Button _botonEliminar;
+        private Action? _alEliminar;
 
         public FilaEntregable()
         {
@@ -224,6 +230,7 @@ public sealed class TablaEntregables : UserControl
                 Content = new Icono { Nombre = "trash", Tamano = 14 },
             };
             ToolTipService.SetToolTip(_botonEliminar, "Eliminar entregable");
+            _botonEliminar.Click += (_, _) => _alEliminar?.Invoke();
 
             // El original apila: botón arriba a la derecha, luego el rótulo
             // centrado vertical y horizontalmente en el resto de la celda.
@@ -272,10 +279,7 @@ public sealed class TablaEntregables : UserControl
         public void EstablecerBorrable(bool borrable, Action alEliminar)
         {
             _botonEliminar.Visibility = borrable ? Visibility.Visible : Visibility.Collapsed;
-            _botonEliminar.Click -= Manejador;
-            _botonEliminar.Click += Manejador;
-
-            void Manejador(object s, RoutedEventArgs e) => alEliminar();
+            _alEliminar = alEliminar;
         }
 
         public void Cargar(EntregablePayload? datos)

@@ -124,6 +124,18 @@ soloAnexos.Anexos!.CelularProveedor = "999 888 777";
 soloAnexos.Anexos.Monto = "S/ 1,234.50";
 Equal("Anexo completo sin campos exclusivos del TDR", DisponibilidadDocumentos.PuedeGenerarAnexos(soloAnexos), true);
 Equal("Anexo válido no informa errores", DisponibilidadDocumentos.ErroresAnexos(soloAnexos).Count, 0);
+soloAnexos.Tdr.Modo = ConstructorPlanPagos.ModoMultiple;
+Equal("Anexo sin pagos registrados usa pago único", ConstructorPlanPagos.ConstruirParaAnexos(soloAnexos.Tdr, "100").Modo, ConstructorPlanPagos.ModoUnico);
+soloAnexos.Tdr.Pagos = [new PagoPayload { Condicion = "Primera conformidad", Porcentaje = 40 }, new PagoPayload { Condicion = "Segunda conformidad", Porcentaje = 60 }];
+Equal("Anexo con pagos no exige entregables ni TDR completo", DisponibilidadDocumentos.PuedeGenerarAnexos(soloAnexos), true);
+var pagosAnexo = ConstructorPlanPagos.ConstruirParaAnexos(soloAnexos.Tdr, "100");
+Equal("Anexo sincroniza condición", pagosAnexo.Cuotas[1].Condicion, "Segunda conformidad");
+Equal("Anexo sincroniza porcentaje", pagosAnexo.Cuotas[1].Porcentaje, 60);
+soloAnexos.Tdr.Pagos[1]!.Porcentaje = 50;
+Equal("Anexo no sustituye pagos incoherentes por pago único", DisponibilidadDocumentos.PuedeGenerarAnexos(soloAnexos), false);
+soloAnexos.Tdr.Pagos[1]!.Porcentaje = 60;
+soloAnexos.Tdr.Modo = ConstructorPlanPagos.ModoUnico;
+Equal("Cambio a pago único ignora cuotas múltiples antiguas", ConstructorPlanPagos.ConstruirParaAnexos(soloAnexos.Tdr, "100").Modo, ConstructorPlanPagos.ModoUnico);
 soloAnexos.Tdr.Generales!.Oficina = "";
 Equal("Área ausente se identifica explícitamente", DisponibilidadDocumentos.ErroresAnexos(soloAnexos).Single(),
     "Área usuaria: complete este dato.");

@@ -47,6 +47,33 @@ public static class ConstructorPlanPagos
 
     public const string ModoMultiple = "multiple";
 
+    public const string TextoPagoUnicoAnexos = "Pago Único";
+
+    /// <summary>Sincroniza solo los pagos registrados; no exige completar los entregables ni el TDR.</summary>
+    public static PlanPagos ConstruirParaAnexos(TdrPayload? tdr, string? montoTotal)
+    {
+        var pagos = tdr?.Pagos;
+        if (tdr?.Modo != ModoMultiple || pagos is null || pagos.Count == 0)
+            return Construir(null, montoTotal);
+
+        var total = ConvertirMonto(montoTotal);
+        var filas = pagos.Select((pago, i) =>
+        {
+            if (pago is null) throw new PlanPagosException($"El pago {i + 1} no tiene un formato válido.");
+            return (Condicion: TextoObligatorio(pago.Condicion, $"La condición del pago {i + 1}"),
+                Porcentaje: PorcentajeEntero(pago.Porcentaje, i + 1));
+        }).ToArray();
+        var porcentajes = filas.Select(f => f.Porcentaje).ToArray();
+        if (porcentajes.Sum() != 100)
+            throw new PlanPagosException($"La suma de los porcentajes debe ser 100 % (actual: {porcentajes.Sum()} %).");
+        var montos = MontosPorPorcentaje(total, porcentajes);
+        var cuotas = filas.Select((fila, i) => new CuotaPago(i + 1,
+            tdr?.Entregables?.ElementAtOrDefault(i)?.Descripcion ?? string.Empty,
+            tdr?.Entregables?.ElementAtOrDefault(i)?.Plazo ?? string.Empty,
+            fila.Condicion, fila.Porcentaje, montos[i])).ToArray();
+        return new PlanPagos(cuotas.Length == 1 ? ModoUnico : ModoMultiple, cuotas, total);
+    }
+
     /// <summary>Construye y valida la forma de pago vigente a partir del TDR.</summary>
     /// <param name="tdr">Estado del TDR; <c>null</c> se interpreta como pago único.</param>
     /// <param name="montoTotal">Monto en texto tal como lo escribió el usuario.</param>
