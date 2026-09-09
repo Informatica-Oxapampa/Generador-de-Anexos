@@ -28,7 +28,7 @@ public static class DisponibilidadDocumentos
         Texto(errores, generales?.DescripcionFinalidadPublica, "Finalidad pública");
         Texto(errores, generales?.ActividadesDesarrollar, "Actividades a desarrollar");
         Exigir(errores, FieldValidators.IsValidClassifier(generales?.Clasificador),
-            "Clasificador de gasto: use seis grupos separados por puntos, por ejemplo 2.3.2.7.11.99.");
+            "Clasificador de gasto: use cuatro o seis grupos numéricos separados por puntos, por ejemplo 2.3.24.71 o 2.3.2.7.11.99.");
         Exigir(errores, FieldValidators.IsPositiveInteger(generales?.DiasPlazo),
             "Plazo de prestación: ingrese un número de días mayor que cero.");
         Exigir(errores, int.TryParse(objeto?.Cantidad, NumberStyles.None, CultureInfo.InvariantCulture,

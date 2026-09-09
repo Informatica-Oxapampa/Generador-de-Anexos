@@ -53,6 +53,10 @@ Equal("correo inválido", FieldValidators.IsValidEmail("oti@"), false);
 Equal("correo demasiado largo", FieldValidators.IsValidEmail(new string('a', 250) + "@x.pe"), false);
 Equal("celular 9 dígitos", FieldValidators.IsValidPhone("999888777"), true);
 Equal("celular con separador no permitido", FieldValidators.IsValidPhone("999-888-777"), false);
+Equal("clasificador de cuatro grupos solicitado", FieldValidators.IsValidClassifier("2.3.24.71"), true);
+Equal("clasificador con espacios exteriores", FieldValidators.IsValidClassifier(" 2.3.24.71 "), true);
+foreach (var invalido in new[] { "2..24.71", "2.3.24.71.", "2.3.24.A1", "2.3.244.71", "2.3.24.7１", "2.3. 24.71", "2.3.24\n.71" })
+    Equal("clasificador mal formado rechazado: " + invalido, FieldValidators.IsValidClassifier(invalido), false);
 Equal("clasificador presupuestal", FieldValidators.IsValidClassifier("2.3.2.7.11.99"), true);
 Equal("clasificador con raíz incorrecta", FieldValidators.IsValidClassifier("3.3.2.7.11.99"), false);
 Equal("clasificador con segmentos incompletos", FieldValidators.IsValidClassifier("2.3.2.7.11"), false);
@@ -78,6 +82,9 @@ Equal("Anexo completo habilita generación", DisponibilidadDocumentos.PuedeGener
 
 listo.Tdr!.Generales!.Clasificador = "2.3";
 Equal("TDR con clasificador incompleto no genera", DisponibilidadDocumentos.PuedeGenerarTdr(listo), false);
+listo.Tdr.Generales.Clasificador = "2.3.24.71";
+Equal("TDR permite generar con clasificador de cuatro grupos", DisponibilidadDocumentos.PuedeGenerarTdr(listo), true);
+Equal("Clasificador conserva su escritura al guardar y cargar", PayloadJson.Deserialize(PayloadJson.Serialize(listo)).Tdr!.Generales!.Clasificador, "2.3.24.71");
 listo.Tdr.Generales.Clasificador = "2.3.2.7.11.99";
 
 listo.Anexos!.CciProveedor = "123";

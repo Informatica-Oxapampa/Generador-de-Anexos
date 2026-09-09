@@ -12,7 +12,7 @@
 ; ============================================================================
 
 #define MiNombre        "Generador de Anexos"
-#define MiVersion       "1.0.2"
+#define MiVersion       "1.0.3"
 #define MiPublicador    "Municipalidad Provincial de Oxapampa - Oficina de Tecnologia de la Informacion"
 #define MiUrl           "https://www.munioxapampa.gob.pe"
 #define MiEjecutable    "GeneradorAnexos.exe"

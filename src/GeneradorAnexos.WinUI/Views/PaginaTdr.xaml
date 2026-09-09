@@ -135,9 +135,9 @@
 
                         <controls:CampoTexto x:Name="CampoClasificador"
                                              Titulo="Clasificador de gasto"
-                                             Marcador="Ej.: 2.3.2.7.11.99"
+                                             Marcador="Ej.: 2.3.24.71 o 2.3.2.7.11.99"
                                              Icono="card"
-                                             MensajeError="Formato no válido (ej.: 2.3.2.7.11.99)." />
+                                             MensajeError="Use cuatro o seis grupos numéricos (ej.: 2.3.24.71 o 2.3.2.7.11.99)." />
 
                         <controls:CampoArea x:Name="CampoDenominacion"
                                             Titulo="Denominación del servicio"

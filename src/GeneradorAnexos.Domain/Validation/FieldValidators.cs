@@ -20,7 +20,7 @@ public static class FieldValidators
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex ClasificadorRegex = new(
-        @"^[0-9]{1,2}(?:\.[0-9]{1,2}){5}$",
+        @"\A2\.(?:[0-9]{1,2}\.){2}[0-9]{1,2}(?:\.[0-9]{1,2}\.[0-9]{1,2})?\z",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly HashSet<string> PrefijosRuc = new(StringComparer.Ordinal)
@@ -94,8 +94,9 @@ public static class FieldValidators
         return digits == LongitudTelefono;
     }
 
+    /// <summary>Acepta códigos de cuatro o seis grupos; no modifica su escritura ni consulta un catálogo.</summary>
     public static bool IsValidClassifier(string? text) =>
-        text is not null && ClasificadorRegex.IsMatch(text.Trim()) && text.Trim().StartsWith("2.", StringComparison.Ordinal);
+        text is not null && ClasificadorRegex.IsMatch(text.Trim());
 
     public static bool IsNonEmptyText(string? text) =>
         !string.IsNullOrWhiteSpace(text);
